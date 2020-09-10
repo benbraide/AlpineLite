@@ -2,3 +2,5 @@
 /package.json
 /package-lock.json
 /tsconfig.json
+/.vscode
+/.nyc_output
