@@ -1,7 +1,7 @@
-import * as Changes from './Changes'
-import * as StateScope from './State'
-import * as HandlerScope from './Handler'
-import * as EvaluatorScope from './Evaluator'
+import * as StateScope from './State.js'
+import * as HandlerScope from './Handler.js'
+import * as ChangesScope from './Changes.js'
+import * as EvaluatorScope from './Evaluator.js'
 
 export namespace AlpineLite{
     export interface OutsideEventHandlerInfo{
@@ -10,20 +10,15 @@ export namespace AlpineLite{
     }
     
     export class CoreBulkHandler{
-        private outsideEventsHandlers_ = new Map<string, Array<OutsideEventHandlerInfo>>();
+        private static outsideEventsHandlers_ = new Map<string, Array<OutsideEventHandlerInfo>>();
 
-        constructor(handler: HandlerScope.AlpineLite.Handler){
-            handler.AddBulkDirectiveHandler(this.Attr);
-            handler.AddBulkDirectiveHandler(this.Event);
-        }
-        
-        public AddOutsideEventHandler(eventName: string, info: OutsideEventHandlerInfo, state: StateScope.AlpineLite.State): void{
-            if (!(eventName in this.outsideEventsHandlers_)){
-                this.outsideEventsHandlers_[eventName] = new Array<OutsideEventHandlerInfo>();
+        public static AddOutsideEventHandler(eventName: string, info: OutsideEventHandlerInfo, state: StateScope.AlpineLite.State): void{
+            if (!(eventName in CoreBulkHandler.outsideEventsHandlers_)){
+                CoreBulkHandler.outsideEventsHandlers_[eventName] = new Array<OutsideEventHandlerInfo>();
                 document.addEventListener(eventName, (event: Event) => {
                     state.PushEventContext(event);
                     
-                    let handlers: Array<OutsideEventHandlerInfo> = this.outsideEventsHandlers_[eventName];
+                    let handlers: Array<OutsideEventHandlerInfo> = CoreBulkHandler.outsideEventsHandlers_[eventName];
                     handlers.forEach((info: OutsideEventHandlerInfo): void => {
                         if (event.target !== info.element && !info.element.contains(event.target as HTMLElement)){
                             try{
@@ -39,10 +34,10 @@ export namespace AlpineLite{
                 });
             }
 
-            this.outsideEventsHandlers_[eventName].push(info);
+            CoreBulkHandler.outsideEventsHandlers_[eventName].push(info);
         }
         
-        public Attr(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+        public static Attr(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             const booleanAttributes: Array<string> = [
                 'allowfullscreen', 'allowpaymentrequest', 'async', 'autofocus', 'autoplay', 'checked', 'controls',
                 'default', 'defer', 'disabled', 'formnovalidate', 'hidden', 'ismap', 'itemscope', 'loop', 'multiple', 'muted',
@@ -56,7 +51,7 @@ export namespace AlpineLite{
             let isBoolean = (booleanAttributes.indexOf(directive.key) != -1);
             let isDisabled = (isBoolean && directive.key == 'disabled');
 
-            state.TrapGetAccess((change: Changes.AlpineLite.IChange | Changes.AlpineLite.IBubbledChange): void => {
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 if (isBoolean){
                     if (EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state)){
                         if (isDisabled && element.tagName === 'A'){
@@ -81,7 +76,7 @@ export namespace AlpineLite{
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
-        public Event(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+        public static Event(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             const knownEvents = [
                 'blur', 'change', 'click', 'contextmenu', 'context-menu', 'dblclick', 'dbl-click', 'focus', 'focusin', 'focus-in', 'focusout', 'focus-out',
                 'hover', 'keydown', 'key-down', 'keyup', 'key-up', 'mousedown', 'mouse-down', 'mouseenter', 'mouse-enter', 'mouseleave', 'mouse-leave',
@@ -138,14 +133,14 @@ export namespace AlpineLite{
                         }
                     }
                     catch (err){
-                        state.ReportError(err, `AlpineLite.CoreHandler.BulkEvent._Trigger_.${eventName}`);
+                        state.ReportError(err, `AlpineLite.CoreBulkHandler.Event._Trigger_.${eventName}`);
                     }
 
                     state.PopEventContext();
                 });
             }
             else{//Listen for event outside element
-                this.AddOutsideEventHandler(eventName, {
+                CoreBulkHandler.AddOutsideEventHandler(eventName, {
                     handler: (event: Event) => {
                         let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
                         if (typeof result === 'function'){//Call function
@@ -155,6 +150,11 @@ export namespace AlpineLite{
                     element: element
                 }, state);
             }
+        }
+
+        public static AddAll(handler: HandlerScope.AlpineLite.Handler){
+            handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
 
         public static GetDisabledClassKey(): string{

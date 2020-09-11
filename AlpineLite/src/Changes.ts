@@ -1,4 +1,4 @@
-import * as StackScope from './Stack'
+import * as StackScope from './Stack.js'
 
 export namespace AlpineLite{
     export interface IChange{

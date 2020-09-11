@@ -1,4 +1,4 @@
-import * as StateScope from './State'
+import * as StateScope from './State.js'
 
 export namespace AlpineLite{
     export enum HandlerReturn{

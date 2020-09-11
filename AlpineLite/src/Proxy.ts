@@ -1,6 +1,6 @@
-import * as StateScope from './State'
-import * as ValueScope from './Value'
-import * as ChangesScope from './Changes'
+import * as StateScope from './State.js'
+import * as ValueScope from './Value.js'
+import * as ChangesScope from './Changes.js'
 
 let AlpineLiteJSProxy = Proxy;
 

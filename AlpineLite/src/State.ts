@@ -1,6 +1,6 @@
-import * as ChangesScope from './Changes'
-import * as StackScope from './Stack'
-import * as ValueScope from './Value'
+import * as StackScope from './Stack.js'
+import * as ValueScope from './Value.js'
+import * as ChangesScope from './Changes.js'
 
 export namespace AlpineLite{
     export interface Context{

@@ -1,5 +1,5 @@
-import * as StateScope from './State'
-import * as HandlerScope from './Handler'
+import * as StateScope from './State.js'
+import * as HandlerScope from './Handler.js'
 
 export namespace AlpineLite{
     export interface ProcessorOptions{
@@ -59,7 +59,18 @@ export namespace AlpineLite{
         }
 
         public DispatchDirective(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement): boolean{
-            let result = this.handler_.HandleDirective(directive, element, this.state_);
+            let result: HandlerScope.AlpineLite.HandlerReturn;
+            try{
+                this.state_.PushElementContext(element);
+                result = this.handler_.HandleDirective(directive, element, this.state_);
+                this.state_.PopElementContext();
+            }
+            catch (err){
+                this.state_.PopElementContext();
+                this.state_.ReportError(err, `AlpineLite.Processor.DispatchDirective._Handle_.${directive.key}`);
+                return true;
+            }
+            
             if (result == HandlerScope.AlpineLite.HandlerReturn.Nil){//Not handled
                 if (1 < directive.parts.length && directive.parts[0] === 'static'){
                     this.state_.PushFlag(StateScope.AlpineLite.StateFlag.StaticBind, true);
