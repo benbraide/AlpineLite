@@ -1,5 +1,5 @@
-import * as StateScope from './State.js'
-import * as HandlerScope from './Handler.js'
+import * as StateScope from './State'
+import * as HandlerScope from './Handler'
 
 export namespace AlpineLite{
     export interface ProcessorOptions{

@@ -1,21 +1,25 @@
-export var AlpineLite;
+"use strict";
+exports.__esModule = true;
+exports.AlpineLite = void 0;
+var AlpineLite;
 (function (AlpineLite) {
-    class Stack {
-        constructor() {
+    var Stack = /** @class */ (function () {
+        function Stack() {
             this.list_ = new Array();
         }
-        Push(value) {
+        Stack.prototype.Push = function (value) {
             this.list_.push(value);
-        }
-        Pop() {
+        };
+        Stack.prototype.Pop = function () {
             return this.list_.pop();
-        }
-        Peek() {
+        };
+        Stack.prototype.Peek = function () {
             return ((this.list_.length == 0) ? null : this.list_[this.list_.length - 1]);
-        }
-        IsEmpty() {
+        };
+        Stack.prototype.IsEmpty = function () {
             return (this.list_.length == 0);
-        }
-    }
+        };
+        return Stack;
+    }());
     AlpineLite.Stack = Stack;
-})(AlpineLite || (AlpineLite = {}));
+})(AlpineLite = exports.AlpineLite || (exports.AlpineLite = {}));

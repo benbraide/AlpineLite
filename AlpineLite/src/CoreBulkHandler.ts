@@ -1,7 +1,7 @@
-import * as StateScope from './State.js'
-import * as HandlerScope from './Handler.js'
-import * as ChangesScope from './Changes.js'
-import * as EvaluatorScope from './Evaluator.js'
+import * as StateScope from './State'
+import * as HandlerScope from './Handler'
+import * as ChangesScope from './Changes'
+import * as EvaluatorScope from './Evaluator'
 
 export namespace AlpineLite{
     export interface OutsideEventHandlerInfo{
@@ -15,7 +15,7 @@ export namespace AlpineLite{
         public static AddOutsideEventHandler(eventName: string, info: OutsideEventHandlerInfo, state: StateScope.AlpineLite.State): void{
             if (!(eventName in CoreBulkHandler.outsideEventsHandlers_)){
                 CoreBulkHandler.outsideEventsHandlers_[eventName] = new Array<OutsideEventHandlerInfo>();
-                document.addEventListener(eventName, (event: Event) => {
+                state.GetRootElement().addEventListener(eventName, (event: Event) => {
                     state.PushEventContext(event);
                     
                     let handlers: Array<OutsideEventHandlerInfo> = CoreBulkHandler.outsideEventsHandlers_[eventName];
@@ -31,10 +31,26 @@ export namespace AlpineLite{
                     });
 
                     state.PopEventContext();
-                });
+                }, true);
             }
 
             CoreBulkHandler.outsideEventsHandlers_[eventName].push(info);
+        }
+
+        public static RemoveOutsideEventHandlers(element: HTMLElement, checkTemplate: boolean = true): void{
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && checkTemplate && element.closest('template')){//Inside template -- ignore
+                return;
+            }
+            
+            for (let eventName in CoreBulkHandler.outsideEventsHandlers_){
+                let list: Array<OutsideEventHandlerInfo> = CoreBulkHandler.outsideEventsHandlers_[eventName];
+                for (let i = list.length; 0 < i; --i){//Check list for matching element
+                    if (list[i - 1].element === element){
+                        list.splice((i - 1), 1);
+                    }
+                }
+            }
         }
         
         public static Attr(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{

@@ -7,9 +7,15 @@
 </head>
 <body>
     <h2>AlpineLite</h2>
-    <script type="module">
+    <div x-data="{email: 'benbraide@yahoo.com', name: 'Benebo Braide'}"></div>
+    <script src="./dist/Bundle.js"></script>
+    <script>
+        let bootstrap = new AlpineLite.Bootstrap();
+        bootstrap.Attach();
+    </script>
+    <!--script type="module">
         import * as CoreHandlerScope from './src/CoreHandler.js'
         console.log(CoreHandlerScope);
-    </script>
+    </script-->
 </body>
 </html>

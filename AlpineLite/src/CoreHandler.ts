@@ -1,9 +1,9 @@
-import * as StateScope from './State.js'
-import * as ProxyScope from './Proxy.js'
-import * as HandlerScope from './Handler.js'
-import * as ChangesScope from './Changes.js'
-import * as EvaluatorScope from './Evaluator.js'
-import * as PlaceholderElementScope from './PlaceholderElement.js'
+import * as StateScope from './State'
+import * as ProxyScope from './Proxy'
+import * as HandlerScope from './Handler'
+import * as ChangesScope from './Changes'
+import * as EvaluatorScope from './Evaluator'
+import * as PlaceholderElementScope from './PlaceholderElement'
 
 export namespace AlpineLite{
     interface TextHandlerOptions{
@@ -22,6 +22,37 @@ export namespace AlpineLite{
         }
 
         public static Data(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
+        public static Init(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+            if (typeof result === 'function'){//Call function
+                (result as () => any)();
+            }
+            
+            return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
+        public static Uninit(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            element[CoreHandler.GetUninitKey()] = () => {
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                if (typeof result === 'function'){//Call function
+                    (result as () => any)();
+                }
+            };
+
+            return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
+        public static Bind(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                if (typeof result === 'function'){//Call function
+                    (result as () => any)();
+                }
+            }, true);
+
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
@@ -280,6 +311,32 @@ export namespace AlpineLite{
             }
 
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
+        public static AddAll(handler: HandlerScope.AlpineLite.Handler){
+            handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
+            handler.AddDirectiveHandler('data', CoreHandler.Data);
+
+            handler.AddDirectiveHandler('init', CoreHandler.Init);
+            handler.AddDirectiveHandler('uninit', CoreHandler.Uninit);
+            handler.AddDirectiveHandler('bind', CoreHandler.Bind);
+
+            handler.AddDirectiveHandler('locals', CoreHandler.Locals);
+            handler.AddDirectiveHandler('id', CoreHandler.Id);
+            handler.AddDirectiveHandler('ref', CoreHandler.Ref);
+
+            handler.AddDirectiveHandler('text', CoreHandler.Text);
+            handler.AddDirectiveHandler('html', CoreHandler.Html);
+
+            handler.AddDirectiveHandler('input', CoreHandler.Input);
+            handler.AddDirectiveHandler('model', CoreHandler.Model);
+
+            handler.AddDirectiveHandler('show', CoreHandler.Show);
+            handler.AddDirectiveHandler('if', CoreHandler.If);
+        }
+
+        public static GetUninitKey(): string{
+            return '__AlpineLiteUninit__';
         }
     }
 }
