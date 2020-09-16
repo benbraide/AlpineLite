@@ -62,6 +62,10 @@ export namespace AlpineLite{
         }
 
         public AddListener(path: string, callback: ChangeCallbackType, element: HTMLElement): void{
+            if (!(path in this.listeners_)){
+                this.listeners_[path] = new Array<ChangeCallbackInfo>();
+            }
+            
             this.listeners_[path].push({
                 callback: callback,
                 element: element
@@ -69,6 +73,10 @@ export namespace AlpineLite{
         }
 
         public RemoveListener(path: string, callback: ChangeCallbackType): void{
+            if (!(path in this.listeners_)){
+                return;
+            }
+            
            if (!callback){
                 delete this.listeners_[path];
                 return;

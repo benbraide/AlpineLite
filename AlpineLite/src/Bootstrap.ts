@@ -9,6 +9,7 @@ import * as CoreBulkHandlerScope from './CoreBulkHandler'
 
 export namespace AlpineLite{
     interface DataRegion{
+        element: HTMLElement;
         data: ProxyScope.AlpineLite.Proxy;
         state: StateScope.AlpineLite.State;
         processor: ProcessorScope.AlpineLite.Processor;
@@ -24,21 +25,29 @@ export namespace AlpineLite{
             CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.AddAll(handler);
         }
 
-        public Attach(): void{
-            this.Attach_('data-x-data');
-            this.Attach_('x-data');
+        public Attach(msDelay: number = 10): void{
+            this.Attach_('data-x-data', msDelay);
+            this.Attach_('x-data', msDelay);
         }
 
-        private Attach_(attr: string): void{
+        private Attach_(attr: string, msDelay: number): void{
             document.querySelectorAll(`[${attr}]`).forEach((element: Element): void => {
                 let attributeValue = element.getAttribute(attr);
                 if (!attributeValue){//Probably contained inside another region
                     return;
                 }
                 
-                let state = new StateScope.AlpineLite.State(new ChangesScope.AlpineLite.Changes(), (element as HTMLElement));
-                let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(attributeValue, state);
+                let state = new StateScope.AlpineLite.State(new ChangesScope.AlpineLite.Changes(msDelay), (element as HTMLElement), (id: string): any => {
+                    for (let i = 0; i < this.dataRegions_.length; ++i){
+                        if (this.dataRegions_[i].element.id === id || this.dataRegions_[i].element.dataset['id'] === id){
+                            return this.dataRegions_[i].data.GetProxy();
+                        }
+                    }
 
+                    return null;
+                });
+
+                let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(attributeValue, state);
                 if (typeof data === 'function'){
                     data = (data as () => {})();
                 }
@@ -47,12 +56,18 @@ export namespace AlpineLite{
                     target: data,
                     name: null,
                     parent: null,
-                    element: (element as HTMLElement),
+                    element: null,
                     state: state
                 });
 
                 if (!proxyData){
-                    state.ReportWarning('Invalid data specified', `AlpineLite.Bootstrap.Attach.${attr}`);
+                    proxyData = ProxyScope.AlpineLite.Proxy.Create({
+                        target: {},
+                        name: null,
+                        parent: null,
+                        element: null,
+                        state: state
+                    });
                 }
                 
                 let handler = new HandlerScope.AlpineLite.Handler();
@@ -61,6 +76,10 @@ export namespace AlpineLite{
                 let observer = new MutationObserver(function(mutations) {
                     mutations.forEach((mutation) => {
                         mutation.removedNodes.forEach((element: Node) => {
+                            if (element.nodeType != 1){
+                                return;
+                            }
+                            
                             let uninitKey = CoreHandlerScope.AlpineLite.CoreHandler.GetUninitKey();
                             if (uninitKey in element){//Execute uninit callback
                                 (element[uninitKey] as () => {})();
@@ -79,7 +98,9 @@ export namespace AlpineLite{
                     });
                 });
                 
+                state.PushValueContext(proxyData.GetProxy());
                 this.dataRegions_.push({
+                    element: (element as HTMLElement),
                     data: proxyData,
                     state: state,
                     processor: processor,
@@ -87,6 +108,7 @@ export namespace AlpineLite{
                     observer: observer
                 });
 
+                ProxyScope.AlpineLite.Proxy.AddCoreSpecialKeys();
                 CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.AddAll(handler);
                 CoreHandlerScope.AlpineLite.CoreHandler.AddAll(handler);
 

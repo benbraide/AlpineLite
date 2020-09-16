@@ -13,21 +13,21 @@ export namespace AlpineLite{
     }
     
     export class State{
-        private changes_: ChangesScope.AlpineLite.Changes = null;
         private elementId_: number = 0;
-        private rootElement_: HTMLElement;
         private elementContext_ = new StackScope.AlpineLite.Stack<HTMLElement>();
         private valueContext_ = new StackScope.AlpineLite.Stack<object>();
         private eventContext_ = new StackScope.AlpineLite.Stack<Event>();
         private localKeys_ = new Array<Record<string, ValueScope.AlpineLite.Value>>();
         private flags_ = new Map<StateFlag, StackScope.AlpineLite.Stack<any>>();
         
-        constructor(changes: ChangesScope.AlpineLite.Changes, rootElement: HTMLElement){
-            this.changes_ = changes;
-            this.rootElement_ = rootElement;
+        constructor(private changes_: ChangesScope.AlpineLite.Changes, private rootElement_: HTMLElement, private componentFinder_: (id: string) => any){
             this.localKeys_['$locals'] = new ValueScope.AlpineLite.Value((valueContext: any) => {
                 return null;
             });
+        }
+
+        public FindComponent(id: string): any{
+            return (this.componentFinder_ ? this.componentFinder_(id) : null);
         }
 
         public GenerateElementId(): number{
@@ -185,7 +185,7 @@ export namespace AlpineLite{
         }
 
         public static GetIdKey(): string{
-            return '__AlpineLiteId__';
+            return '__alpineliteid__';
         }
     }
 }

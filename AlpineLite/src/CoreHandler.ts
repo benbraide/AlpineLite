@@ -158,7 +158,7 @@ export namespace AlpineLite{
             }
 
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                if (options.callback && options.callback()){
+                if (!options.callback || options.callback()){
                     callback(change);
                 }
             }, true);
@@ -232,7 +232,7 @@ export namespace AlpineLite{
             }
 
             let onEvent = (event: Event): void => {
-                if (options.callback && options.callback()){
+                if (!options.callback || options.callback()){
                     EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state);
                 }
             };
