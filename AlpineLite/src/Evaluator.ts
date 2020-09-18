@@ -58,15 +58,18 @@ export namespace AlpineLite{
             return value;
         }
         
-        public static Evaluate(expression: string, state: StateScope.AlpineLite.State): any{
+        public static Evaluate(expression: string, state: StateScope.AlpineLite.State, elementContext?: HTMLElement): any{
             expression = expression.trim();
             if (expression === ''){
                 return null;
             }
 
             let result: any = null;
-            let elementContext = (state ? state.GetElementContext() : null);
             let valueContext = (state ? state.GetValueContext() : null);
+
+            if (!elementContext){
+                elementContext = (state ? state.GetElementContext() : null);
+            }
             
             try{
                 if (valueContext){
@@ -89,9 +92,9 @@ export namespace AlpineLite{
             return result;
         }
 
-        public static Interpolate(expression: string, state: StateScope.AlpineLite.State): string{
+        public static Interpolate(expression: string, state: StateScope.AlpineLite.State, elementContext?: HTMLElement): string{
             return expression.replace(/\{\{(.+?)\}\}/g, ($0: string, $1: string) => {
-                return (Evaluator.Evaluate($1, state) || '');
+                return (Evaluator.Evaluate($1, state, elementContext) || '');
             });
         }
 

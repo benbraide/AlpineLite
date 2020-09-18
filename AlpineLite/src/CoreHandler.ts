@@ -26,7 +26,7 @@ export namespace AlpineLite{
         }
 
         public static Init(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
-            let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+            let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
                 (result as () => any)();
             }
@@ -36,7 +36,7 @@ export namespace AlpineLite{
 
         public static Uninit(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             element[CoreHandler.GetUninitKey()] = () => {
-                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any)();
                 }
@@ -47,7 +47,7 @@ export namespace AlpineLite{
 
         public static Bind(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any)();
                 }
@@ -57,7 +57,7 @@ export namespace AlpineLite{
         }
 
         public static Locals(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
-            let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+            let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
                 result = (result as () => any)();
             }
@@ -71,7 +71,13 @@ export namespace AlpineLite{
             });
 
             if (!proxy){
-                state.ReportError('Invalid target for locals', 'AlpineLite.CoreHandler.Locals');
+                proxy = ProxyScope.AlpineLite.Proxy.Create({
+                    target: {},
+                    name: state.GetElementId(element),
+                    parent: null,
+                    element: element,
+                    state: state
+                });
             }
 
             element[ProxyScope.AlpineLite.Proxy.GetProxyKey()] = {
@@ -83,16 +89,16 @@ export namespace AlpineLite{
         }
 
         public static Id(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
-            EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})='${state.GetElementId(element)}'`, state);
+            EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})='${state.GetElementId(element)}'`, state, element);
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
         public static Ref(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             if (element.tagName === 'TEMPLATE'){
-                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=this.content`, state);
+                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=this.content`, state, element);
             }
             else{
-                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=this`, state);
+                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=this`, state, element);
             }
 
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
@@ -119,7 +125,7 @@ export namespace AlpineLite{
         private static Text_(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State, options: TextHandlerOptions): void{
             let callback: (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange) => void;
             let getValue = (): any => {
-                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
             
@@ -228,12 +234,12 @@ export namespace AlpineLite{
             }
 
             if (options.preEvaluate){
-                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state);
+                EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state, element);
             }
 
             let onEvent = (event: Event): void => {
                 if (!options.callback || options.callback()){
-                    EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state);
+                    EvaluatorScope.AlpineLite.Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state, element);
                 }
             };
 
@@ -247,7 +253,7 @@ export namespace AlpineLite{
 
         public static Show(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             let getValue = (): any => {
-                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
             
@@ -273,7 +279,7 @@ export namespace AlpineLite{
             let marker = document.createElement('x-placeholder');
             
             let getValue = (): any => {
-                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
 

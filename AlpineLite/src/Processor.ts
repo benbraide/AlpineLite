@@ -1,5 +1,7 @@
 import * as StateScope from './State'
 import * as HandlerScope from './Handler'
+import * as ChangesScope from './Changes'
+import * as EvaluatorScope from './Evaluator'
 
 export namespace AlpineLite{
     export interface ProcessorOptions{
@@ -54,6 +56,9 @@ export namespace AlpineLite{
             Processor.TraverseDirectives(elementNode, (directive: HandlerScope.AlpineLite.ProcessorDirective): boolean => {
                 return this.DispatchDirective(directive, elementNode);
             }, (attribute: Attr): boolean => {//Check for data binding inside attribute
+                // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
+                // }, true);
                 return true;
             });
         }

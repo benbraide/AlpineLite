@@ -33,7 +33,7 @@ export namespace AlpineLite{
         private Attach_(attr: string, msDelay: number): void{
             document.querySelectorAll(`[${attr}]`).forEach((element: Element): void => {
                 let attributeValue = element.getAttribute(attr);
-                if (!attributeValue){//Probably contained inside another region
+                if (attributeValue === undefined){//Probably contained inside another region
                     return;
                 }
                 

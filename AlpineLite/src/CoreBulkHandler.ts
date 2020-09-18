@@ -69,7 +69,7 @@ export namespace AlpineLite{
 
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 if (isBoolean){
-                    if (EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state)){
+                    if (EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element)){
                         if (isDisabled && element.tagName === 'A'){
                             element.classList.add(CoreBulkHandler.GetDisabledClassKey());
                         }
@@ -85,7 +85,7 @@ export namespace AlpineLite{
                     }
                 }
                 else{
-                    element.setAttribute(directive.parts[1], EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state));
+                    element.setAttribute(directive.parts[1], EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element));
                 }
             }, true);
 
@@ -143,7 +143,7 @@ export namespace AlpineLite{
 
                     state.PushEventContext(event);
                     try{
-                        let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                        let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
                             (result as (event: Event) => void)(event);
                         }
@@ -158,7 +158,7 @@ export namespace AlpineLite{
             else{//Listen for event outside element
                 CoreBulkHandler.AddOutsideEventHandler(eventName, {
                     handler: (event: Event) => {
-                        let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state);
+                        let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
                             (result as (event: Event) => void)(event);
                         }

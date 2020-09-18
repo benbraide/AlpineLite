@@ -358,7 +358,7 @@ namespace AlpineLite{
         constructor(public value: any){}
     }
 
-    export type ProxySpecialKeyHandler = (target: object, name: string, proxy: Proxy, result?: any) => {};
+    export type ProxySpecialKeyHandler = (proxy: Proxy, result?: any) => {};
 
     export enum ProxyRequireType{
         Nil,
@@ -406,15 +406,15 @@ namespace AlpineLite{
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     let name = prop.toString();
 
-                    let keyResult = Proxy.HandleSpecialKey(target, name, self);
+                    let keyResult = Proxy.HandleSpecialKey(name, self);
                     if (!(keyResult instanceof ProxyNoResult)){//Value returned
-                        return Proxy.ResolveValue(keyResult, element);
+                        return Proxy.ResolveValue(keyResult);
                     }
                     
-                    if (element){
+                    if (element && !self.details_.element){
                         let value = Proxy.Get(element, name, !(prop in target), self.details_.state);
                         if (!(value instanceof ProxyNoResult)){//Value returned
-                            return Proxy.ResolveValue(value, element);
+                            return Proxy.ResolveValue(value);
                         }
                     }
 
@@ -447,7 +447,7 @@ namespace AlpineLite{
                     let nonProxyValue = Proxy.GetNonProxy(value);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, !exists, self.details_.state)){
+                    if (element && !self.details_.element && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, !exists, self.details_.state)){
                         return true;
                     }
 
@@ -469,7 +469,7 @@ namespace AlpineLite{
                     let exists = (prop in target);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
+                    if (element && !self.details_.element && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
                         return true;
                     }
 
@@ -616,7 +616,7 @@ namespace AlpineLite{
             let initialized = (pk in element);
             let changes = state?.GetChanges();
 
-            if (initialized && (name in element[pk])){
+            if (initialized && (name in element[pk].raw)){
                 let value = Proxy.Create({
                     target: element[pk].raw[name],
                     name: name,
@@ -649,7 +649,9 @@ namespace AlpineLite{
             }
             
             if (!initialized){//Initialize
-                let raw = { name: null };
+                let raw = {};
+
+                raw[name] = null;
                 element[pk] = {
                     raw: raw,
                     proxy: Proxy.Create({
@@ -683,7 +685,7 @@ namespace AlpineLite{
             let pk = Proxy.GetProxyKey();
             let initialized = (pk in element);
 
-            if (initialized && (name in element[pk])){
+            if (initialized && (name in element[pk].raw)){
                 element[pk].raw[name] = value;
                 (element[pk].proxy as Proxy).Alert_('set', name, true, value, true);
                 return true;
@@ -702,7 +704,9 @@ namespace AlpineLite{
             }
             
             if (!initialized){//Initialize
-                let raw = { name: value };
+                let raw = {};
+
+                raw[name] = value;
                 element[pk] = {
                     raw: raw,
                     proxy: Proxy.Create({
@@ -730,7 +734,7 @@ namespace AlpineLite{
             let pk = Proxy.GetProxyKey();
             let initialized = (pk in element);
 
-            if (initialized && (name in element[pk])){
+            if (initialized && (name in element[pk].raw)){
                 let raw = element[pk].raw;
                 let proxy = (element[pk].proxy as Proxy);
 
@@ -759,7 +763,7 @@ namespace AlpineLite{
             return target;
         }
 
-        public static ResolveValue(value: any, element: HTMLElement): any{
+        public static ResolveValue(value: any): any{
             if (value instanceof Value){
                 return (value as Value).Get();
             }
@@ -779,7 +783,7 @@ namespace AlpineLite{
             (Proxy.specialKeys_[key] as Array<ProxySpecialKeyHandler>).push(handler);
         }
 
-        public static HandleSpecialKey(target: object, name: string, proxy: Proxy): any{
+        public static HandleSpecialKey(name: string, proxy: Proxy): any{
             if (!(name in Proxy.specialKeys_)){
                 return new ProxyNoResult();
             }
@@ -788,7 +792,7 @@ namespace AlpineLite{
             let handlers: Array<ProxySpecialKeyHandler> = Proxy.specialKeys_[name];
             
             for (let i = 0; i < handlers.length; ++i){
-                result = (handlers[i])(target, name, proxy, result);
+                result = Proxy.ResolveValue((handlers[i])(proxy, result));
                 if (result instanceof ProxyStopPropagation){
                     return (result as ProxyStopPropagation).value;
                 }
@@ -798,8 +802,8 @@ namespace AlpineLite{
         }
 
         public static AddCoreSpecialKeys(): void{
-            let addKey = (key: string, callback: (target: object, name: string, proxy: Proxy) => {}, requireRoot: ProxyRequireType, requireElement: ProxyRequireType) => {
-                Proxy.AddSpecialKey(key, (target: object, name: string, proxy: Proxy): any => {
+            let addKey = (key: string, callback: (proxy: Proxy, result?: any) => {}, requireRoot: ProxyRequireType, requireElement: ProxyRequireType) => {
+                Proxy.AddSpecialKey(key, (proxy: Proxy, result?: any): any => {
                     if (requireRoot == ProxyRequireType.Required && proxy.details_.parent){
                         return new ProxyNoResult();
                     }
@@ -816,40 +820,189 @@ namespace AlpineLite{
                         return new ProxyNoResult();
                     }
                     
-                    return callback(target, name, proxy);
+                    return callback(proxy, result);
                 });
             };
 
-            let addRootKey = (key: string, callback: (target: object, name: string, proxy: Proxy) => {}) => {
-                addKey(key, (target: object, name: string, proxy: Proxy): any => {
-                    return callback(target, name, proxy);
-                }, ProxyRequireType.Required, ProxyRequireType.MustBeAbsent);
+            let addRootKey = (key: string, callback: (proxy: Proxy, result?: any) => {}) => {
+                addKey(key, callback, ProxyRequireType.Required, ProxyRequireType.MustBeAbsent);
             };
             
-            let addElementKey = (key: string, callback: (target: object, name: string, proxy: Proxy) => {}) => {
-                addKey(key, (target: object, name: string, proxy: Proxy): any => {
-                    return callback(target, name, proxy);
-                }, ProxyRequireType.Nil, ProxyRequireType.Required);
+            let addElementKey = (key: string, callback: (proxy: Proxy, result?: any) => {}) => {
+                addKey(key, callback, ProxyRequireType.Nil, ProxyRequireType.Required);
             };
 
-            let addAnyKey = (key: string, callback: (target: object, name: string, proxy: Proxy) => {}) => {
-                addKey(key, (target: object, name: string, proxy: Proxy): any => {
-                    return callback(target, name, proxy);
-                }, ProxyRequireType.Nil, ProxyRequireType.Nil);
+            let addAnyKey = (key: string, callback: (proxy: Proxy, result?: any) => {}) => {
+                addKey(key, callback, ProxyRequireType.Nil, ProxyRequireType.Nil);
             };
+
+            let getLocals = (element: HTMLElement, proxy: Proxy) => {
+                if (!element){
+                    return null;
+                }
+
+                let pk = Proxy.GetProxyKey();
+                if (pk in element){//Initialized
+                    return (element[pk].proxy as Proxy).GetProxy();
+                }
+
+                let raw = {};
+                let localsProxy = Proxy.Create({
+                    target: raw,
+                    name: proxy.details_.state.GetElementId(element),
+                    parent: null,
+                    element: element,
+                    state: proxy.details_.state
+                });
+                
+                element[pk] = {
+                    raw: raw,
+                    proxy: localsProxy
+                };
+
+                return localsProxy.GetProxy();
+            };
+
+            let isEqual = (first: any, second: any) => {
+                let firstType = (typeof first), secondType = (typeof second);
+                if (firstType !== secondType){
+                    return false;
+                }
+
+                if (Array.isArray(first)){
+                    if (first.length != second.length){
+                        return false;
+                    }
+
+                    for (let i = 0; i < first.length; ++i){
+                        if (!isEqual(first[i], second[i])){
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }
+
+                if (firstType === 'object'){
+                    let firstKeys = Object.keys(first), secondKeys = Object.keys(second);
+                    if (!isEqual(firstKeys, secondKeys)){
+                        return false;
+                    }
+
+                    for (let i = 0; i < firstKeys.length; ++i){
+                        if (!isEqual(first[firstKeys[i]], second[firstKeys[i]])){
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }
+                
+                return (first === second);
+            };
+
+            let watch = (target: string, proxy: Proxy, callback: (value: any) => {}) => {
+                let stoppedWatching = false;
+                let previousValue: any = null;
+                
+                proxy.details_.state.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
+                    stoppedWatching = !callback(previousValue);
+                }, (change: IChange | IBubbledChange): void => {
+                    if (stoppedWatching){
+                        return;
+                    }
+                    
+                    let value = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
+                    if (!isEqual(value, previousValue)){
+                        previousValue = value;
+                        stoppedWatching = !callback(value);
+                    }
+                });
+            };
+
+            addRootKey('$window', (proxy: Proxy): any => {
+                return window;
+            });
             
-            addRootKey('$component', (target: object, name: string, proxy: Proxy): any => {
+            addRootKey('$document', (proxy: Proxy): any => {
+                return document;
+            });
+            
+            addRootKey('$console', (proxy: Proxy): any => {
+                return console;
+            });
+            
+            addRootKey('$event', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.details_.state.GetEventContext();
+                });
+            });
+
+            addRootKey('$component', (proxy: Proxy): any => {
                 return (id: string): any => {
                     return proxy.details_.state.FindComponent(id);
                 };
             });
 
-            addAnyKey('$get', (target: object, name: string, proxy: Proxy): any => {
+            addRootKey('$locals', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return getLocals(proxy.GetContextElement(), proxy);
+                });
+            });
+
+            addRootKey('$localsFor', (proxy: Proxy): any => {
+                return (element: HTMLElement) => {
+                    let rootElement = proxy.details_.state.GetRootElement();
+                    if (element && element !== rootElement && !rootElement.contains(element)){
+                        return null;
+                    }
+                    
+                    return getLocals(element, proxy);
+                };
+            });
+
+            addRootKey('$watch', (proxy: Proxy): any => {
+                return (target: string, callback: (value: any) => {}) => {
+                    let isInitial = true;
+                    watch(target, proxy, (value: any): boolean => {
+                        if (isInitial){
+                            isInitial = false;
+                            return true;
+                        }
+                        
+                        return (callback.call(proxy.GetProxy(), value) !== false);
+                    });
+                };
+            });
+
+            addRootKey('$when', (proxy: Proxy): any => {
+                return (target: string, callback: (value: any) => {}) => {
+                    watch(target, proxy, (value: any): boolean => {
+                        return (!value || callback.call(proxy.GetProxy(), value) !== false);
+                    });
+                };
+            });
+
+            addRootKey('$once', (proxy: Proxy): any => {
+                return (target: string, callback: (value: any) => {}) => {
+                    watch(target, proxy, (value: any): boolean => {
+                        if (!value){
+                            return true;
+                        }
+
+                        callback.call(proxy.GetProxy(), value);
+                        return false;
+                    });
+                };
+            });
+
+            addAnyKey('$get', (proxy: Proxy): any => {
                 return (prop: string): any => {
-                    let baseValue = ((prop in target) ? Reflect.get(target, prop) : null);
+                    let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
                     let value = Proxy.Create({
                         target: baseValue,
-                        name: name,
+                        name: prop,
                         parent: proxy,
                         element: null,
                         state: proxy.details_.state
@@ -857,7 +1010,7 @@ namespace AlpineLite{
 
                     let changes = proxy.details_.state?.GetChanges();
                     if (changes){
-                        changes.AddGetAccess(name, proxy.GetPath(name));
+                        changes.AddGetAccess(prop, proxy.GetPath(prop));
                     }
 
                     if (value){
@@ -865,6 +1018,40 @@ namespace AlpineLite{
                     }
 
                     return baseValue;
+                };
+            });
+
+            addAnyKey('$set', (proxy: Proxy): any => {
+                return (prop: string, value: any): boolean => {
+                    let exists = (prop in proxy.details_.target);
+                    
+                    proxy.details_.target[prop] = Proxy.GetNonProxy(value);
+                    if (prop in proxy.proxies_){
+                        proxy.proxies_[prop].details_.parent = null;
+                        delete proxy.proxies_[prop];
+                    }
+
+                    proxy.Alert_('set', prop.toString(), exists, value, true);
+
+                    return true;
+                };
+            });
+
+            addAnyKey('$delete', (proxy: Proxy): any => {
+                return (prop: string): boolean => {
+                    let exists = (prop in proxy.details_.target);
+                    
+                    if (proxy.details_.parent){
+                        proxy.details_.parent.Alert_('delete', proxy.details_.name, exists, { name: prop, value: proxy.details_.target[prop] }, false);
+                    }
+
+                    delete proxy.details_.target[prop];
+                    if (prop in proxy.proxies_){
+                        proxy.proxies_[prop].details_.parent = null;
+                        delete proxy.proxies_[prop];
+                    }
+
+                    return true;
                 };
             });
         }
@@ -928,15 +1115,18 @@ namespace AlpineLite{
             return value;
         }
         
-        public static Evaluate(expression: string, state: State): any{
+        public static Evaluate(expression: string, state: State, elementContext?: HTMLElement): any{
             expression = expression.trim();
             if (expression === ''){
                 return null;
             }
 
             let result: any = null;
-            let elementContext = (state ? state.GetElementContext() : null);
             let valueContext = (state ? state.GetValueContext() : null);
+
+            if (!elementContext){
+                elementContext = (state ? state.GetElementContext() : null);
+            }
             
             try{
                 if (valueContext){
@@ -959,9 +1149,9 @@ namespace AlpineLite{
             return result;
         }
 
-        public static Interpolate(expression: string, state: State): string{
+        public static Interpolate(expression: string, state: State, elementContext?: HTMLElement): string{
             return expression.replace(/\{\{(.+?)\}\}/g, ($0: string, $1: string) => {
-                return (Evaluator.Evaluate($1, state) || '');
+                return (Evaluator.Evaluate($1, state, elementContext) || '');
             });
         }
 
@@ -1254,7 +1444,7 @@ namespace AlpineLite{
                     });
 
                     state.PopEventContext();
-                });
+                }, true);
             }
 
             CoreBulkHandler.outsideEventsHandlers_[eventName].push(info);
@@ -1292,7 +1482,7 @@ namespace AlpineLite{
 
             state.TrapGetAccess((change: IChange | IBubbledChange): void => {
                 if (isBoolean){
-                    if (Evaluator.Evaluate(directive.value, state)){
+                    if (Evaluator.Evaluate(directive.value, state, element)){
                         if (isDisabled && element.tagName === 'A'){
                             element.classList.add(CoreBulkHandler.GetDisabledClassKey());
                         }
@@ -1308,7 +1498,7 @@ namespace AlpineLite{
                     }
                 }
                 else{
-                    element.setAttribute(directive.parts[1], Evaluator.Evaluate(directive.value, state));
+                    element.setAttribute(directive.parts[1], Evaluator.Evaluate(directive.value, state, element));
                 }
             }, true);
 
@@ -1366,7 +1556,7 @@ namespace AlpineLite{
 
                     state.PushEventContext(event);
                     try{
-                        let result = Evaluator.Evaluate(directive.value, state);
+                        let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
                             (result as (event: Event) => void)(event);
                         }
@@ -1381,7 +1571,7 @@ namespace AlpineLite{
             else{//Listen for event outside element
                 CoreBulkHandler.AddOutsideEventHandler(eventName, {
                     handler: (event: Event) => {
-                        let result = Evaluator.Evaluate(directive.value, state);
+                        let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
                             (result as (event: Event) => void)(event);
                         }
@@ -1423,7 +1613,7 @@ namespace AlpineLite{
         }
 
         public static Init(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            let result = Evaluator.Evaluate(directive.value, state);
+            let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
                 (result as () => any)();
             }
@@ -1433,7 +1623,7 @@ namespace AlpineLite{
 
         public static Uninit(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             element[CoreHandler.GetUninitKey()] = () => {
-                let result = Evaluator.Evaluate(directive.value, state);
+                let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any)();
                 }
@@ -1444,7 +1634,7 @@ namespace AlpineLite{
 
         public static Bind(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             state.TrapGetAccess((change: IChange | IBubbledChange): void => {
-                let result = Evaluator.Evaluate(directive.value, state);
+                let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any)();
                 }
@@ -1454,7 +1644,7 @@ namespace AlpineLite{
         }
 
         public static Locals(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            let result = Evaluator.Evaluate(directive.value, state);
+            let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
                 result = (result as () => any)();
             }
@@ -1468,7 +1658,13 @@ namespace AlpineLite{
             });
 
             if (!proxy){
-                state.ReportError('Invalid target for locals', 'AlpineLite.CoreHandler.Locals');
+                proxy = Proxy.Create({
+                    target: result,
+                    name: state.GetElementId(element),
+                    parent: null,
+                    element: element,
+                    state: state
+                });
             }
 
             element[Proxy.GetProxyKey()] = {
@@ -1480,16 +1676,16 @@ namespace AlpineLite{
         }
 
         public static Id(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            Evaluator.Evaluate(`(${directive.value})='${state.GetElementId(element)}'`, state);
+            Evaluator.Evaluate(`(${directive.value})='${state.GetElementId(element)}'`, state, element);
             return HandlerReturn.Handled;
         }
 
         public static Ref(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             if (element.tagName === 'TEMPLATE'){
-                Evaluator.Evaluate(`(${directive.value})=this.content`, state);
+                Evaluator.Evaluate(`(${directive.value})=this.content`, state, element);
             }
             else{
-                Evaluator.Evaluate(`(${directive.value})=this`, state);
+                Evaluator.Evaluate(`(${directive.value})=this`, state, element);
             }
 
             return HandlerReturn.Handled;
@@ -1516,7 +1712,7 @@ namespace AlpineLite{
         private static Text_(directive: ProcessorDirective, element: HTMLElement, state: State, options: TextHandlerOptions): void{
             let callback: (change: IChange | IBubbledChange) => void;
             let getValue = (): any => {
-                let result = Evaluator.Evaluate(directive.value, state);
+                let result = Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
             
@@ -1625,12 +1821,12 @@ namespace AlpineLite{
             }
 
             if (options.preEvaluate){
-                Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state);
+                Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state, element);
             }
 
             let onEvent = (event: Event): void => {
                 if (!options.callback || options.callback()){
-                    Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state);
+                    Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state, element);
                 }
             };
 
@@ -1644,7 +1840,7 @@ namespace AlpineLite{
 
         public static Show(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             let getValue = (): any => {
-                let result = Evaluator.Evaluate(directive.value, state);
+                let result = Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
             
@@ -1670,7 +1866,7 @@ namespace AlpineLite{
             let marker = document.createElement('x-placeholder');
             
             let getValue = (): any => {
-                let result = Evaluator.Evaluate(directive.value, state);
+                let result = Evaluator.Evaluate(directive.value, state, element);
                 return ((typeof result === 'function') ? (result as () => any)() : result);
             };
 
@@ -1764,7 +1960,7 @@ namespace AlpineLite{
         private Attach_(attr: string, msDelay: number): void{
             document.querySelectorAll(`[${attr}]`).forEach((element: Element): void => {
                 let attributeValue = element.getAttribute(attr);
-                if (!attributeValue){//Probably contained inside another region
+                if (attributeValue === undefined){//Probably contained inside another region
                     return;
                 }
                 
