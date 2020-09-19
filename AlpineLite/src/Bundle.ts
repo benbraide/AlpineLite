@@ -614,6 +614,10 @@ namespace AlpineLite{
                 return null;
             }
 
+            if (target instanceof Node || target instanceof DOMTokenList){
+                return null;
+            }
+
             return new Proxy(details);
         }
 
@@ -1074,6 +1078,12 @@ namespace AlpineLite{
                     }
                     
                     return getLocals(element, proxy);
+                };
+            });
+
+            addRootKey('raw', (proxy: Proxy): any => {
+                return (target: any) => {
+                    return Proxy.GetNonProxy(target);
                 };
             });
 

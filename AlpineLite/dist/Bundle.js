@@ -476,6 +476,9 @@ var AlpineLite;
             if (!target || targetType === 'string' || targetType === 'function' || targetType !== 'object') {
                 return null;
             }
+            if (target instanceof Node || target instanceof DOMTokenList) {
+                return null;
+            }
             return new Proxy(details);
         }
         static Get(element, name, always, state) {
@@ -843,6 +846,11 @@ var AlpineLite;
                         return null;
                     }
                     return getLocals(element, proxy);
+                };
+            });
+            addRootKey('raw', (proxy) => {
+                return (target) => {
+                    return Proxy.GetNonProxy(target);
                 };
             });
             addRootKey('watch', (proxy) => {

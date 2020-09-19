@@ -31,6 +31,7 @@ namespace AlpineLite{
                         color: #ffffff;
                         border-radius: 50%;
                         transition: all 0.25s ease;
+                        z-index; 9999;
                     }
                 </style>
                 <i class="material-icons-outlined">arrow_upward</i>
@@ -61,8 +62,8 @@ namespace AlpineLite{
             shadowRoot.appendChild(tmpl.content.cloneNode(true));
         }
         
-        public static Register(): void{
-            customElements.define('x-scroll-top', ScrollTop);
+        public static Register(prefix: string = 'x'): void{
+            customElements.define(`${prefix}-scroll-top`, ScrollTop);
         }
     }
 }
