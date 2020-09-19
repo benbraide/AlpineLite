@@ -49,7 +49,7 @@ export namespace AlpineLite{
 
                 let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(attributeValue, state);
                 if (typeof data === 'function'){
-                    data = (data as () => {})();
+                    data = (data as () => void)();
                 }
                 
                 let proxyData = ProxyScope.AlpineLite.Proxy.Create({
@@ -75,22 +75,26 @@ export namespace AlpineLite{
 
                 let observer = new MutationObserver(function(mutations) {
                     mutations.forEach((mutation) => {
-                        mutation.removedNodes.forEach((element: Node) => {
-                            if (element.nodeType != 1){
+                        mutation.removedNodes.forEach((node: Node) => {
+                            if (node?.nodeType !== 1){
                                 return;
                             }
                             
                             let uninitKey = CoreHandlerScope.AlpineLite.CoreHandler.GetUninitKey();
-                            if (uninitKey in element){//Execute uninit callback
-                                (element[uninitKey] as () => {})();
-                                delete element[uninitKey];
+                            if (uninitKey in node){//Execute uninit callback
+                                (node[uninitKey] as () => void)();
+                                delete node[uninitKey];
                             }
 
-                            CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.RemoveOutsideEventHandlers(element as HTMLElement);
+                            CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
                         });
 
-                        mutation.addedNodes.forEach((element: Node) => {
-                            processor.All(element, {
+                        mutation.addedNodes.forEach((node: Node) => {
+                            if (node?.nodeType !== 1){
+                                return;
+                            }
+
+                            processor.All((node as HTMLElement), {
                                 checkTemplate: true,
                                 checkDocument: false
                             });
@@ -112,7 +116,7 @@ export namespace AlpineLite{
                 CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.AddAll(handler);
                 CoreHandlerScope.AlpineLite.CoreHandler.AddAll(handler);
 
-                processor.All(element);
+                processor.All((element as HTMLElement));
                 observer.observe(element, {
                     childList: true,
                     subtree: true,

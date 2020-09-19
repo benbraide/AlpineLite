@@ -969,6 +969,91 @@ namespace AlpineLite{
                 });
             });
 
+            addRootKey('self', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.GetContextElement();
+                });
+            });
+
+            addRootKey('parent', (proxy: Proxy): any => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    return ((contextElement && contextElement != proxy.details_.state.GetRootElement()) ? contextElement.parentElement : null);
+                });
+            });
+
+            addRootKey('ancestor', (proxy: Proxy): any => {
+                return (index: number) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return null;
+                    }
+
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor: HTMLElement = contextElement;
+                    for (; 0 <= index; --index){
+                        if (ancestor === rootElement){
+                            return null;
+                        }
+
+                        ancestor = ancestor.parentElement;
+                    }
+                    
+                    return ancestor;
+                };
+            });
+
+            addRootKey('ancestors', (proxy: Proxy): any => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return [];
+                    }
+
+                    let list = new Array<HTMLElement>();
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor: HTMLElement = contextElement;
+
+                    while (true){
+                        if (ancestor === rootElement){
+                            break;
+                        }
+
+                        ancestor = ancestor.parentElement;
+                        list.push(ancestor);
+                    }
+                    
+                    return list;
+                });
+            });
+
+            addRootKey('child', (proxy: Proxy): any => {
+                return (index: number) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement || contextElement.childElementCount <= index){
+                        return null;
+                    }
+
+                    return contextElement.children[index];
+                };
+            });
+
+            addRootKey('children', (proxy: Proxy): any => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return [];
+                    }
+
+                    let list = new Array<HTMLElement>();
+                    let children = contextElement.children;
+
+                    for (let i = 0; i < children.length; ++i){
+                        list.push((children[i] as HTMLElement));
+                    }
+                    
+                    return list;
+                });
+            });
+
             addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
                     return proxy.details_.state.FindComponent(id);
@@ -1173,6 +1258,7 @@ namespace AlpineLite{
                 }
             }
             catch (err){
+                result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
             }
 
@@ -1252,44 +1338,43 @@ namespace AlpineLite{
             this.handler_ = handler;
         }
 
-        public All(node: Node, options?: ProcessorOptions): void{
-            if (!Processor.Check(node, options)){//Check failed -- ignore
+        public All(element: HTMLElement, options?: ProcessorOptions): void{
+            if (!Processor.Check(element, options)){//Check failed -- ignore
                 return;
             }
 
-            let isTemplate = (node.nodeType == 1 && (node as HTMLElement).tagName == 'TEMPLATE');
-            if (!isTemplate && options?.checkTemplate && Processor.GetHTMLElement(node).closest('template')){//Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && options?.checkTemplate && element.closest('template')){//Inside template -- ignore
                 return;
             }
 
-            this.One(node);
-            if (isTemplate || node.nodeType == 3){//Don't process template content OR node is text node (no content)
+            this.One(element);
+            if (isTemplate){//Don't process template content
                 return;
             }
 
-            node.childNodes.forEach((node: Node) => {//Process content
-                this.All(node);
-            });
+            let children = element.children;
+            for (let i = 0; i < children.length; ++i){//Process children
+                this.All(children[i] as HTMLElement);
+            }
         }
 
-        public One(node: Node, options?: ProcessorOptions): void{
-            if (!Processor.Check(node, options)){//Check failed -- ignore
+        public One(element: HTMLElement, options?: ProcessorOptions): void{
+            if (!Processor.Check(element, options)){//Check failed -- ignore
                 return;
             }
 
-            let isTemplate = (node.nodeType == 1 && (node as HTMLElement).tagName == 'TEMPLATE');
-            if (!isTemplate && options?.checkTemplate && Processor.GetHTMLElement(node).closest('template')){//Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && options?.checkTemplate && element.closest('template')){//Inside template -- ignore
                 return;
             }
             
-            if (node.nodeType == 3){//Text node
-                return;
-            }
-
-            let elementNode = (node as HTMLElement);
-            Processor.TraverseDirectives(elementNode, (directive: ProcessorDirective): boolean => {
-                return this.DispatchDirective(directive, elementNode);
+            Processor.TraverseDirectives(element, (directive: ProcessorDirective): boolean => {
+                return this.DispatchDirective(directive, element);
             }, (attribute: Attr): boolean => {//Check for data binding inside attribute
+                // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
+                // }, true);
                 return true;
             });
         }
@@ -1352,12 +1437,12 @@ namespace AlpineLite{
             return true;
         }
 
-        public static Check(node: Node, options: ProcessorOptions): boolean{
-            if (node.nodeType != 1 && node.nodeType != 3){//Node is not an element or a text node
+        public static Check(element: HTMLElement, options: ProcessorOptions): boolean{
+            if (element?.nodeType !== 1){//Not an HTMLElement
                 return false;
             }
-
-            if (options?.checkDocument && !document.contains(node)){//Node is not contained inside the document
+            
+            if (options?.checkDocument && !document.contains(element)){//Node is not contained inside the document
                 return false;
             }
 
@@ -2006,7 +2091,7 @@ namespace AlpineLite{
 
                 let data = Evaluator.Evaluate(attributeValue, state);
                 if (typeof data === 'function'){
-                    data = (data as () => {})();
+                    data = (data as () => void)();
                 }
                 
                 let proxyData = Proxy.Create({
@@ -2032,22 +2117,26 @@ namespace AlpineLite{
 
                 let observer = new MutationObserver(function(mutations) {
                     mutations.forEach((mutation) => {
-                        mutation.removedNodes.forEach((element: Node) => {
-                            if (element.nodeType != 1){
+                        mutation.removedNodes.forEach((node: Node) => {
+                            if (node.nodeType != 1){
                                 return;
                             }
                             
                             let uninitKey = CoreHandler.GetUninitKey();
-                            if (uninitKey in element){//Execute uninit callback
-                                (element[uninitKey] as () => {})();
-                                delete element[uninitKey];
+                            if (uninitKey in node){//Execute uninit callback
+                                (node[uninitKey] as () => void)();
+                                delete node[uninitKey];
                             }
 
-                            CoreBulkHandler.RemoveOutsideEventHandlers(element as HTMLElement);
+                            CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
                         });
 
-                        mutation.addedNodes.forEach((element: Node) => {
-                            processor.All(element, {
+                        mutation.addedNodes.forEach((node: Node) => {
+                            if (node?.nodeType !== 1){
+                                return;
+                            }
+                            
+                            processor.All((node as HTMLElement), {
                                 checkTemplate: true,
                                 checkDocument: false
                             });
@@ -2069,7 +2158,7 @@ namespace AlpineLite{
                 CoreBulkHandler.AddAll(handler);
                 CoreHandler.AddAll(handler);
 
-                processor.All(element);
+                processor.All(element as HTMLElement);
                 observer.observe(element, {
                     childList: true,
                     subtree: true,

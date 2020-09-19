@@ -625,6 +625,91 @@ export namespace AlpineLite{
                 });
             });
 
+            addRootKey('self', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy.GetContextElement();
+                });
+            });
+
+            addRootKey('parent', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    return ((contextElement && contextElement != proxy.details_.state.GetRootElement()) ? contextElement.parentElement : null);
+                });
+            });
+
+            addRootKey('ancestor', (proxy: Proxy): any => {
+                return (index: number) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return null;
+                    }
+
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor: HTMLElement = contextElement;
+                    for (; 0 <= index; --index){
+                        if (ancestor === rootElement){
+                            return null;
+                        }
+
+                        ancestor = ancestor.parentElement;
+                    }
+                    
+                    return ancestor;
+                };
+            });
+
+            addRootKey('ancestors', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return [];
+                    }
+
+                    let list = new Array<HTMLElement>();
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor: HTMLElement = contextElement;
+
+                    while (true){
+                        if (ancestor === rootElement){
+                            break;
+                        }
+
+                        ancestor = ancestor.parentElement;
+                        list.push(ancestor);
+                    }
+                    
+                    return list;
+                });
+            });
+
+            addRootKey('child', (proxy: Proxy): any => {
+                return (index: number) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement || contextElement.childElementCount <= index){
+                        return null;
+                    }
+
+                    return contextElement.children[index];
+                };
+            });
+
+            addRootKey('children', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement){
+                        return [];
+                    }
+
+                    let list = new Array<HTMLElement>();
+                    let children = contextElement.children;
+
+                    for (let i = 0; i < children.length; ++i){
+                        list.push((children[i] as HTMLElement));
+                    }
+                    
+                    return list;
+                });
+            });
+
             addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
                     return proxy.details_.state.FindComponent(id);

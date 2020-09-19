@@ -86,6 +86,7 @@ export namespace AlpineLite{
                 }
             }
             catch (err){
+                result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
             }
 

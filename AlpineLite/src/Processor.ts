@@ -18,43 +18,39 @@ export namespace AlpineLite{
             this.handler_ = handler;
         }
 
-        public All(node: Node, options?: ProcessorOptions): void{
-            if (!Processor.Check(node, options)){//Check failed -- ignore
+        public All(element: HTMLElement, options?: ProcessorOptions): void{
+            if (!Processor.Check(element, options)){//Check failed -- ignore
                 return;
             }
 
-            let isTemplate = (node.nodeType == 1 && (node as HTMLElement).tagName == 'TEMPLATE');
-            if (!isTemplate && options?.checkTemplate && Processor.GetHTMLElement(node).closest('template')){//Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && options?.checkTemplate && element.closest('template')){//Inside template -- ignore
                 return;
             }
 
-            this.One(node);
-            if (isTemplate || node.nodeType == 3){//Don't process template content OR node is text node (no content)
+            this.One(element);
+            if (isTemplate){//Don't process template content
                 return;
             }
 
-            node.childNodes.forEach((node: Node) => {//Process content
-                this.All(node);
-            });
+            let children = element.children;
+            for (let i = 0; i < children.length; ++i){//Process children
+                this.All(children[i] as HTMLElement);
+            }
         }
 
-        public One(node: Node, options?: ProcessorOptions): void{
-            if (!Processor.Check(node, options)){//Check failed -- ignore
+        public One(element: HTMLElement, options?: ProcessorOptions): void{
+            if (!Processor.Check(element, options)){//Check failed -- ignore
                 return;
             }
 
-            let isTemplate = (node.nodeType == 1 && (node as HTMLElement).tagName == 'TEMPLATE');
-            if (!isTemplate && options?.checkTemplate && Processor.GetHTMLElement(node).closest('template')){//Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && options?.checkTemplate && element.closest('template')){//Inside template -- ignore
                 return;
             }
             
-            if (node.nodeType == 3){//Text node
-                return;
-            }
-
-            let elementNode = (node as HTMLElement);
-            Processor.TraverseDirectives(elementNode, (directive: HandlerScope.AlpineLite.ProcessorDirective): boolean => {
-                return this.DispatchDirective(directive, elementNode);
+            Processor.TraverseDirectives(element, (directive: HandlerScope.AlpineLite.ProcessorDirective): boolean => {
+                return this.DispatchDirective(directive, element);
             }, (attribute: Attr): boolean => {//Check for data binding inside attribute
                 // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
@@ -121,12 +117,12 @@ export namespace AlpineLite{
             return true;
         }
 
-        public static Check(node: Node, options: ProcessorOptions): boolean{
-            if (node.nodeType != 1 && node.nodeType != 3){//Node is not an element or a text node
+        public static Check(element: HTMLElement, options: ProcessorOptions): boolean{
+            if (element?.nodeType !== 1){//Not an HTMLElement
                 return false;
             }
-
-            if (options?.checkDocument && !document.contains(node)){//Node is not contained inside the document
+            
+            if (options?.checkDocument && !document.contains(element)){//Node is not contained inside the document
                 return false;
             }
 

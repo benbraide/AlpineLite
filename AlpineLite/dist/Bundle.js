@@ -758,6 +758,74 @@ var AlpineLite;
                     return proxy.details_.state.GetEventContext();
                 });
             });
+            addRootKey('self', (proxy) => {
+                return new Value(() => {
+                    return proxy.GetContextElement();
+                });
+            });
+            addRootKey('parent', (proxy) => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    return ((contextElement && contextElement != proxy.details_.state.GetRootElement()) ? contextElement.parentElement : null);
+                });
+            });
+            addRootKey('ancestor', (proxy) => {
+                return (index) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement) {
+                        return null;
+                    }
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor = contextElement;
+                    for (; 0 <= index; --index) {
+                        if (ancestor === rootElement) {
+                            return null;
+                        }
+                        ancestor = ancestor.parentElement;
+                    }
+                    return ancestor;
+                };
+            });
+            addRootKey('ancestors', (proxy) => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement) {
+                        return [];
+                    }
+                    let list = new Array();
+                    let rootElement = proxy.details_.state.GetRootElement(), ancestor = contextElement;
+                    while (true) {
+                        if (ancestor === rootElement) {
+                            break;
+                        }
+                        ancestor = ancestor.parentElement;
+                        list.push(ancestor);
+                    }
+                    return list;
+                });
+            });
+            addRootKey('child', (proxy) => {
+                return (index) => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement || contextElement.childElementCount <= index) {
+                        return null;
+                    }
+                    return contextElement.children[index];
+                };
+            });
+            addRootKey('children', (proxy) => {
+                return new Value(() => {
+                    let contextElement = proxy.GetContextElement();
+                    if (!contextElement) {
+                        return [];
+                    }
+                    let list = new Array();
+                    let children = contextElement.children;
+                    for (let i = 0; i < children.length; ++i) {
+                        list.push(children[i]);
+                    }
+                    return list;
+                });
+            });
             addRootKey('component', (proxy) => {
                 return (id) => {
                     return proxy.details_.state.FindComponent(id);
@@ -928,6 +996,7 @@ var AlpineLite;
                 }
             }
             catch (err) {
+                result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
             }
             return result;
@@ -983,37 +1052,37 @@ var AlpineLite;
             this.state_ = state;
             this.handler_ = handler;
         }
-        All(node, options) {
-            if (!Processor.Check(node, options)) { //Check failed -- ignore
+        All(element, options) {
+            if (!Processor.Check(element, options)) { //Check failed -- ignore
                 return;
             }
-            let isTemplate = (node.nodeType == 1 && node.tagName == 'TEMPLATE');
-            if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && Processor.GetHTMLElement(node).closest('template')) { //Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && element.closest('template')) { //Inside template -- ignore
                 return;
             }
-            this.One(node);
-            if (isTemplate || node.nodeType == 3) { //Don't process template content OR node is text node (no content)
+            this.One(element);
+            if (isTemplate) { //Don't process template content
                 return;
             }
-            node.childNodes.forEach((node) => {
-                this.All(node);
-            });
+            let children = element.children;
+            for (let i = 0; i < children.length; ++i) { //Process children
+                this.All(children[i]);
+            }
         }
-        One(node, options) {
-            if (!Processor.Check(node, options)) { //Check failed -- ignore
+        One(element, options) {
+            if (!Processor.Check(element, options)) { //Check failed -- ignore
                 return;
             }
-            let isTemplate = (node.nodeType == 1 && node.tagName == 'TEMPLATE');
-            if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && Processor.GetHTMLElement(node).closest('template')) { //Inside template -- ignore
+            let isTemplate = (element.tagName == 'TEMPLATE');
+            if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && element.closest('template')) { //Inside template -- ignore
                 return;
             }
-            if (node.nodeType == 3) { //Text node
-                return;
-            }
-            let elementNode = node;
-            Processor.TraverseDirectives(elementNode, (directive) => {
-                return this.DispatchDirective(directive, elementNode);
+            Processor.TraverseDirectives(element, (directive) => {
+                return this.DispatchDirective(directive, element);
             }, (attribute) => {
+                // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
+                // }, true);
                 return true;
             });
         }
@@ -1067,11 +1136,11 @@ var AlpineLite;
             }
             return true;
         }
-        static Check(node, options) {
-            if (node.nodeType != 1 && node.nodeType != 3) { //Node is not an element or a text node
+        static Check(element, options) {
+            if ((element === null || element === void 0 ? void 0 : element.nodeType) !== 1) { //Not an HTMLElement
                 return false;
             }
-            if ((options === null || options === void 0 ? void 0 : options.checkDocument) && !document.contains(node)) { //Node is not contained inside the document
+            if ((options === null || options === void 0 ? void 0 : options.checkDocument) && !document.contains(element)) { //Node is not contained inside the document
                 return false;
             }
             return true;
@@ -1622,19 +1691,22 @@ var AlpineLite;
                 let processor = new Processor(state, handler);
                 let observer = new MutationObserver(function (mutations) {
                     mutations.forEach((mutation) => {
-                        mutation.removedNodes.forEach((element) => {
-                            if (element.nodeType != 1) {
+                        mutation.removedNodes.forEach((node) => {
+                            if (node.nodeType != 1) {
                                 return;
                             }
                             let uninitKey = CoreHandler.GetUninitKey();
-                            if (uninitKey in element) { //Execute uninit callback
-                                element[uninitKey]();
-                                delete element[uninitKey];
+                            if (uninitKey in node) { //Execute uninit callback
+                                node[uninitKey]();
+                                delete node[uninitKey];
                             }
-                            CoreBulkHandler.RemoveOutsideEventHandlers(element);
+                            CoreBulkHandler.RemoveOutsideEventHandlers(node);
                         });
-                        mutation.addedNodes.forEach((element) => {
-                            processor.All(element, {
+                        mutation.addedNodes.forEach((node) => {
+                            if ((node === null || node === void 0 ? void 0 : node.nodeType) !== 1) {
+                                return;
+                            }
+                            processor.All(node, {
                                 checkTemplate: true,
                                 checkDocument: false
                             });

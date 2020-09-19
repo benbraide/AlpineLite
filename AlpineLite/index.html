@@ -4,39 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AlpineLite</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined" rel="stylesheet">
+    <style>
+        x-scroll-top{
+            color: aqua;
+        }
+    </style>
 </head>
 <body>
-    <h2>AlpineLite</h2>
-    <div id="first-segment" x-data="{email: 'user.yahoo@yahoo.com', name: 'John Doe'}">
-        <div>
-            <span>Name: </span>
-            <span x-text="name"></span>
+    <x-scroll-top></x-scroll-top>
+    <div style="height: 2000px;">
+        <h2>AlpineLite</h2>
+        <div id="first-segment" x-data="{email: 'user.yahoo@yahoo.com', name: 'John Doe', state: true}" x-locals="{name: 'Local Entry'}">
+            <div>
+                <span>Name: </span>
+                <span x-text="name"></span>
+            </div>
+            <div>
+                <span>Name (by $get): </span>
+                <span x-text="$get('name')"></span>
+            </div>
+            <div>
+                <span>Email: </span>
+                <span x-text="email"></span>
+            </div>
+            <div>
+                <span>Local Name: </span>
+                <span x-text="$localsFor($ancestor(1)).name"></span>
+            </div>
+            <div>
+                <span>Local Name Alt: </span>
+                <span x-text="$localsFor($ancestors[1]).name"></span>
+            </div>
+            <p x-if="state" x-uninit="$console.log('State was changed to false')">State is true</p>
+            <p x-if="!state" x-uninit="$console.log('State was changed to true')">State is false</p>
         </div>
-        <div>
-            <span>Name (by $get): </span>
-            <span x-text="$get('name')"></span>
-        </div>
-        <div>
-            <span>Email: </span>
-            <span x-text="email"></span>
-        </div>
-    </div>
-    <div x-data="{email: 'user.google@gmail.com', name: 'Jane Hamlet'}">
-        <div>
-            <span>Name: </span>
-            <span x-text="name"></span>
-        </div>
-        <div>
-            <span>Other Name: </span>
-            <span x-text="$component('first-segment').name"></span>
-        </div>
-        <div>
-            <span>Email: </span>
-            <span x-text="email"></span>
+        <div x-data="{email: 'user.google@gmail.com', name: 'Jane Hamlet'}">
+            <div>
+                <span>Name: </span>
+                <span x-text="name"></span>
+            </div>
+            <div>
+                <span>Other Name: </span>
+                <span x-text="$component('first-segment').name"></span>
+            </div>
+            <div>
+                <span>Email: </span>
+                <span x-text="email"></span>
+            </div>
         </div>
     </div>
     <script src="./dist/Bundle.js"></script>
+    <script src="./dist/ScrollTop.js"></script>
     <script>
+        AlpineLite.ScrollTop.Register();
+        
         let bootstrap = new AlpineLite.Bootstrap();
         bootstrap.Attach();
     </script>
