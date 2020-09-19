@@ -19,6 +19,7 @@ export namespace AlpineLite{
     export interface ChangeCallbackInfo{
         callback: ChangeCallbackType;
         element: HTMLElement;
+        key: string;
     }
 
     export type GetAccessStorage = Record<string, string>;
@@ -61,14 +62,15 @@ export namespace AlpineLite{
             }
         }
 
-        public AddListener(path: string, callback: ChangeCallbackType, element: HTMLElement): void{
+        public AddListener(path: string, callback: ChangeCallbackType, element?: HTMLElement, key?: string): void{
             if (!(path in this.listeners_)){
                 this.listeners_[path] = new Array<ChangeCallbackInfo>();
             }
             
             this.listeners_[path].push({
                 callback: callback,
-                element: element
+                element: element,
+                key: key
             });
         }
 
@@ -90,10 +92,14 @@ export namespace AlpineLite{
             }
         }
 
-        public RemoveListeners(element: HTMLElement): void{
+        public RemoveListeners(target: HTMLElement | string): void{
+            let isKey = (typeof target === 'string');
             for (let path in this.listeners_){
                 for (let i = this.listeners_[path].length; i > 0; --i){
-                    if (this.listeners_[path][i - 1].element === element){
+                    if (isKey && this.listeners_[path][i - 1].key === target){
+                        this.listeners_[path].slice((i - 1), 1);
+                    }
+                    else if (!isKey && this.listeners_[path][i - 1].element === target){
                         this.listeners_[path].slice((i - 1), 1);
                     }
                 }

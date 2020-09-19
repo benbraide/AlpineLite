@@ -54,6 +54,7 @@ namespace AlpineLite{
     interface ChangeCallbackInfo{
         callback: ChangeCallbackType;
         element: HTMLElement;
+        key: string;
     }
 
     type GetAccessStorage = Record<string, string>;
@@ -97,14 +98,15 @@ namespace AlpineLite{
             }
         }
 
-        public AddListener(path: string, callback: ChangeCallbackType, element: HTMLElement): void{
+        public AddListener(path: string, callback: ChangeCallbackType, element?: HTMLElement, key?: string): void{
             if (!(path in this.listeners_)){
                 this.listeners_[path] = new Array<ChangeCallbackInfo>();
             }
             
             this.listeners_[path].push({
                 callback: callback,
-                element: element
+                element: element,
+                key: key
             });
         }
 
@@ -126,10 +128,14 @@ namespace AlpineLite{
             }
         }
 
-        public RemoveListeners(element: HTMLElement): void{
+        public RemoveListeners(target: HTMLElement | string): void{
+            let isKey = (typeof target === 'string');
             for (let path in this.listeners_){
                 for (let i = this.listeners_[path].length; i > 0; --i){
-                    if (this.listeners_[path][i - 1].element === element){
+                    if (isKey && this.listeners_[path][i - 1].key === target){
+                        this.listeners_[path].slice((i - 1), 1);
+                    }
+                    else if (!isKey && this.listeners_[path][i - 1].element === target){
                         this.listeners_[path].slice((i - 1), 1);
                     }
                 }
@@ -183,6 +189,10 @@ namespace AlpineLite{
         }
 
         public GetElementId(element: HTMLElement): string{
+            if (!element){
+                return '';
+            }
+            
             let id = element.getAttribute(State.GetIdKey());
             if (!id){//Not initialized
                 id = this.GenerateElementId().toString();
@@ -279,7 +289,7 @@ namespace AlpineLite{
             }
         }
 
-        public TrapGetAccess(callback: ChangeCallbackType, changeCallback?: ChangeCallbackType | boolean, element?: HTMLElement): void{
+        public TrapGetAccess(callback: ChangeCallbackType, changeCallback?: ChangeCallbackType | boolean, element?: HTMLElement, key?: string): void{
             let getAccessStorage: GetAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)){//Listen for get events
                 this.changes_.PushGetAccessStorage(getAccessStorage);
@@ -322,13 +332,13 @@ namespace AlpineLite{
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
                         getAccessStorage[path] = '';
-                        this.changes_.AddListener(path, onChange, element);
+                        this.changes_.AddListener(path, onChange, element, key);
                     }
                 });
             };
 
             paths.forEach((path: string): void => {//Listen for changes on accessed paths
-                this.changes_.AddListener(path, onChange, element);
+                this.changes_.AddListener(path, onChange, element, key);
             });
         }
 
@@ -776,6 +786,7 @@ namespace AlpineLite{
         }
 
         public static AddSpecialKey(key: string, handler: ProxySpecialKeyHandler): void{
+            key = ('$' + key);
             if (!(key in Proxy.specialKeys_)){
                 Proxy.specialKeys_[key] = new Array<ProxySpecialKeyHandler>();
             }
@@ -904,54 +915,73 @@ namespace AlpineLite{
             let watch = (target: string, proxy: Proxy, callback: (value: any) => {}) => {
                 let stoppedWatching = false;
                 let previousValue: any = null;
+
+                let contextElement = proxy.GetContextElement();
+                let key = proxy.details_.state.GetElementId(contextElement);
+
+                if (key !== ''){
+                    key += '_watch';
+                }
                 
                 proxy.details_.state.TrapGetAccess((change: IChange | IBubbledChange): void => {
-                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
+                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
                     stoppedWatching = !callback(previousValue);
                 }, (change: IChange | IBubbledChange): void => {
                     if (stoppedWatching){
+                        if (key !== ''){
+                            proxy.details_.state.GetChanges().RemoveListeners(key);
+                            key = '';
+                        }
+
                         return;
                     }
                     
-                    let value = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
-                    if (!isEqual(value, previousValue)){
-                        previousValue = value;
-                        stoppedWatching = !callback(value);
+                    let value = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
+                    if (isEqual(value, previousValue)){
+                        return;
                     }
-                });
+                    
+                    if (key !== ''){
+                        proxy.details_.state.GetChanges().RemoveListeners(key);
+                        key = '';
+                    }
+                    
+                    previousValue = value;
+                    stoppedWatching = !callback(value);
+                }, null, key);
             };
 
-            addRootKey('$window', (proxy: Proxy): any => {
+            addRootKey('window', (proxy: Proxy): any => {
                 return window;
             });
             
-            addRootKey('$document', (proxy: Proxy): any => {
+            addRootKey('document', (proxy: Proxy): any => {
                 return document;
             });
             
-            addRootKey('$console', (proxy: Proxy): any => {
+            addRootKey('console', (proxy: Proxy): any => {
                 return console;
             });
             
-            addRootKey('$event', (proxy: Proxy): any => {
+            addRootKey('event', (proxy: Proxy): any => {
                 return new Value(() => {
                     return proxy.details_.state.GetEventContext();
                 });
             });
 
-            addRootKey('$component', (proxy: Proxy): any => {
+            addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
                     return proxy.details_.state.FindComponent(id);
                 };
             });
 
-            addRootKey('$locals', (proxy: Proxy): any => {
+            addRootKey('locals', (proxy: Proxy): any => {
                 return new Value(() => {
                     return getLocals(proxy.GetContextElement(), proxy);
                 });
             });
 
-            addRootKey('$localsFor', (proxy: Proxy): any => {
+            addRootKey('localsFor', (proxy: Proxy): any => {
                 return (element: HTMLElement) => {
                     let rootElement = proxy.details_.state.GetRootElement();
                     if (element && element !== rootElement && !rootElement.contains(element)){
@@ -962,7 +992,7 @@ namespace AlpineLite{
                 };
             });
 
-            addRootKey('$watch', (proxy: Proxy): any => {
+            addRootKey('watch', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     let isInitial = true;
                     watch(target, proxy, (value: any): boolean => {
@@ -976,7 +1006,7 @@ namespace AlpineLite{
                 };
             });
 
-            addRootKey('$when', (proxy: Proxy): any => {
+            addRootKey('when', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     watch(target, proxy, (value: any): boolean => {
                         return (!value || callback.call(proxy.GetProxy(), value) !== false);
@@ -984,7 +1014,7 @@ namespace AlpineLite{
                 };
             });
 
-            addRootKey('$once', (proxy: Proxy): any => {
+            addRootKey('once', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     watch(target, proxy, (value: any): boolean => {
                         if (!value){
@@ -997,7 +1027,7 @@ namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$get', (proxy: Proxy): any => {
+            addAnyKey('get', (proxy: Proxy): any => {
                 return (prop: string): any => {
                     let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
                     let value = Proxy.Create({
@@ -1021,7 +1051,7 @@ namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$set', (proxy: Proxy): any => {
+            addAnyKey('set', (proxy: Proxy): any => {
                 return (prop: string, value: any): boolean => {
                     let exists = (prop in proxy.details_.target);
                     
@@ -1037,7 +1067,7 @@ namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$delete', (proxy: Proxy): any => {
+            addAnyKey('delete', (proxy: Proxy): any => {
                 return (prop: string): boolean => {
                     let exists = (prop in proxy.details_.target);
                     

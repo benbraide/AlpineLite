@@ -442,6 +442,7 @@ export namespace AlpineLite{
         }
 
         public static AddSpecialKey(key: string, handler: ProxySpecialKeyHandler): void{
+            key = ('$' + key);
             if (!(key in Proxy.specialKeys_)){
                 Proxy.specialKeys_[key] = new Array<ProxySpecialKeyHandler>();
             }
@@ -570,54 +571,73 @@ export namespace AlpineLite{
             let watch = (target: string, proxy: Proxy, callback: (value: any) => {}) => {
                 let stoppedWatching = false;
                 let previousValue: any = null;
+
+                let contextElement = proxy.GetContextElement();
+                let key = proxy.details_.state.GetElementId(contextElement);
+
+                if (key !== ''){
+                    key += '_watch';
+                }
                 
                 proxy.details_.state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                    previousValue = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
+                    previousValue = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
                     stoppedWatching = !callback(previousValue);
                 }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                     if (stoppedWatching){
+                        if (key !== ''){
+                            proxy.details_.state.GetChanges().RemoveListeners(key);
+                            key = '';
+                        }
+
                         return;
                     }
                     
-                    let value = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
-                    if (!isEqual(value, previousValue)){
-                        previousValue = value;
-                        stoppedWatching = !callback(value);
+                    let value = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
+                    if (isEqual(value, previousValue)){
+                        return;
                     }
-                });
+                    
+                    if (key !== ''){
+                        proxy.details_.state.GetChanges().RemoveListeners(key);
+                        key = '';
+                    }
+                    
+                    previousValue = value;
+                    stoppedWatching = !callback(value);
+                }, null, key);
             };
 
-            addRootKey('$window', (proxy: Proxy): any => {
+            addRootKey('window', (proxy: Proxy): any => {
                 return window;
             });
             
-            addRootKey('$document', (proxy: Proxy): any => {
+            addRootKey('document', (proxy: Proxy): any => {
                 return document;
             });
             
-            addRootKey('$console', (proxy: Proxy): any => {
+            addRootKey('console', (proxy: Proxy): any => {
                 return console;
             });
             
-            addRootKey('$event', (proxy: Proxy): any => {
+            addRootKey('event', (proxy: Proxy): any => {
                 return new ValueScope.AlpineLite.Value(() => {
                     return proxy.details_.state.GetEventContext();
                 });
             });
 
-            addRootKey('$component', (proxy: Proxy): any => {
+            addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
                     return proxy.details_.state.FindComponent(id);
                 };
             });
 
-            addRootKey('$locals', (proxy: Proxy): any => {
+            addRootKey('locals', (proxy: Proxy): any => {
                 return new ValueScope.AlpineLite.Value(() => {
                     return getLocals(proxy.GetContextElement(), proxy);
                 });
             });
 
-            addRootKey('$localsFor', (proxy: Proxy): any => {
+            addRootKey('localsFor', (proxy: Proxy): any => {
                 return (element: HTMLElement) => {
                     let rootElement = proxy.details_.state.GetRootElement();
                     if (element && element !== rootElement && !rootElement.contains(element)){
@@ -628,7 +648,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addRootKey('$watch', (proxy: Proxy): any => {
+            addRootKey('watch', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     let isInitial = true;
                     watch(target, proxy, (value: any): boolean => {
@@ -642,7 +662,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addRootKey('$when', (proxy: Proxy): any => {
+            addRootKey('when', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     watch(target, proxy, (value: any): boolean => {
                         return (!value || callback.call(proxy.GetProxy(), value) !== false);
@@ -650,7 +670,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addRootKey('$once', (proxy: Proxy): any => {
+            addRootKey('once', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     watch(target, proxy, (value: any): boolean => {
                         if (!value){
@@ -663,7 +683,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$get', (proxy: Proxy): any => {
+            addAnyKey('get', (proxy: Proxy): any => {
                 return (prop: string): any => {
                     let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
                     let value = Proxy.Create({
@@ -687,7 +707,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$set', (proxy: Proxy): any => {
+            addAnyKey('set', (proxy: Proxy): any => {
                 return (prop: string, value: any): boolean => {
                     let exists = (prop in proxy.details_.target);
                     
@@ -703,7 +723,7 @@ export namespace AlpineLite{
                 };
             });
 
-            addAnyKey('$delete', (proxy: Proxy): any => {
+            addAnyKey('delete', (proxy: Proxy): any => {
                 return (prop: string): boolean => {
                     let exists = (prop in proxy.details_.target);
                     

@@ -64,13 +64,14 @@ var AlpineLite;
                 storage[path] = name;
             }
         }
-        AddListener(path, callback, element) {
+        AddListener(path, callback, element, key) {
             if (!(path in this.listeners_)) {
                 this.listeners_[path] = new Array();
             }
             this.listeners_[path].push({
                 callback: callback,
-                element: element
+                element: element,
+                key: key
             });
         }
         RemoveListener(path, callback) {
@@ -88,10 +89,14 @@ var AlpineLite;
                 }
             }
         }
-        RemoveListeners(element) {
+        RemoveListeners(target) {
+            let isKey = (typeof target === 'string');
             for (let path in this.listeners_) {
                 for (let i = this.listeners_[path].length; i > 0; --i) {
-                    if (this.listeners_[path][i - 1].element === element) {
+                    if (isKey && this.listeners_[path][i - 1].key === target) {
+                        this.listeners_[path].slice((i - 1), 1);
+                    }
+                    else if (!isKey && this.listeners_[path][i - 1].element === target) {
                         this.listeners_[path].slice((i - 1), 1);
                     }
                 }
@@ -136,6 +141,9 @@ var AlpineLite;
             return ++this.elementId_;
         }
         GetElementId(element) {
+            if (!element) {
+                return '';
+            }
             let id = element.getAttribute(State.GetIdKey());
             if (!id) { //Not initialized
                 id = this.GenerateElementId().toString();
@@ -209,7 +217,7 @@ var AlpineLite;
                 console.warn(value, ref);
             }
         }
-        TrapGetAccess(callback, changeCallback, element) {
+        TrapGetAccess(callback, changeCallback, element, key) {
             let getAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)) { //Listen for get events
                 this.changes_.PushGetAccessStorage(getAccessStorage);
@@ -246,12 +254,12 @@ var AlpineLite;
                 Object.keys(newGetAccessStorage).forEach((path) => {
                     if (!(path in getAccessStorage)) { //New path
                         getAccessStorage[path] = '';
-                        this.changes_.AddListener(path, onChange, element);
+                        this.changes_.AddListener(path, onChange, element, key);
                     }
                 });
             };
             paths.forEach((path) => {
-                this.changes_.AddListener(path, onChange, element);
+                this.changes_.AddListener(path, onChange, element, key);
             });
         }
         static GetIdKey() {
@@ -606,6 +614,7 @@ var AlpineLite;
             return '__AlpineLiteProxy__';
         }
         static AddSpecialKey(key, handler) {
+            key = ('$' + key);
             if (!(key in Proxy.specialKeys_)) {
                 Proxy.specialKeys_[key] = new Array();
             }
@@ -707,45 +716,59 @@ var AlpineLite;
             let watch = (target, proxy, callback) => {
                 let stoppedWatching = false;
                 let previousValue = null;
+                let contextElement = proxy.GetContextElement();
+                let key = proxy.details_.state.GetElementId(contextElement);
+                if (key !== '') {
+                    key += '_watch';
+                }
                 proxy.details_.state.TrapGetAccess((change) => {
-                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
+                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
                     stoppedWatching = !callback(previousValue);
                 }, (change) => {
                     if (stoppedWatching) {
+                        if (key !== '') {
+                            proxy.details_.state.GetChanges().RemoveListeners(key);
+                            key = '';
+                        }
                         return;
                     }
-                    let value = Evaluator.Evaluate(target, proxy.details_.state, proxy.GetContextElement());
-                    if (!isEqual(value, previousValue)) {
-                        previousValue = value;
-                        stoppedWatching = !callback(value);
+                    let value = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
+                    if (isEqual(value, previousValue)) {
+                        return;
                     }
-                });
+                    if (key !== '') {
+                        proxy.details_.state.GetChanges().RemoveListeners(key);
+                        key = '';
+                    }
+                    previousValue = value;
+                    stoppedWatching = !callback(value);
+                }, null, key);
             };
-            addRootKey('$window', (proxy) => {
+            addRootKey('window', (proxy) => {
                 return window;
             });
-            addRootKey('$document', (proxy) => {
+            addRootKey('document', (proxy) => {
                 return document;
             });
-            addRootKey('$console', (proxy) => {
+            addRootKey('console', (proxy) => {
                 return console;
             });
-            addRootKey('$event', (proxy) => {
+            addRootKey('event', (proxy) => {
                 return new Value(() => {
                     return proxy.details_.state.GetEventContext();
                 });
             });
-            addRootKey('$component', (proxy) => {
+            addRootKey('component', (proxy) => {
                 return (id) => {
                     return proxy.details_.state.FindComponent(id);
                 };
             });
-            addRootKey('$locals', (proxy) => {
+            addRootKey('locals', (proxy) => {
                 return new Value(() => {
                     return getLocals(proxy.GetContextElement(), proxy);
                 });
             });
-            addRootKey('$localsFor', (proxy) => {
+            addRootKey('localsFor', (proxy) => {
                 return (element) => {
                     let rootElement = proxy.details_.state.GetRootElement();
                     if (element && element !== rootElement && !rootElement.contains(element)) {
@@ -754,7 +777,7 @@ var AlpineLite;
                     return getLocals(element, proxy);
                 };
             });
-            addRootKey('$watch', (proxy) => {
+            addRootKey('watch', (proxy) => {
                 return (target, callback) => {
                     let isInitial = true;
                     watch(target, proxy, (value) => {
@@ -766,14 +789,14 @@ var AlpineLite;
                     });
                 };
             });
-            addRootKey('$when', (proxy) => {
+            addRootKey('when', (proxy) => {
                 return (target, callback) => {
                     watch(target, proxy, (value) => {
                         return (!value || callback.call(proxy.GetProxy(), value) !== false);
                     });
                 };
             });
-            addRootKey('$once', (proxy) => {
+            addRootKey('once', (proxy) => {
                 return (target, callback) => {
                     watch(target, proxy, (value) => {
                         if (!value) {
@@ -784,7 +807,7 @@ var AlpineLite;
                     });
                 };
             });
-            addAnyKey('$get', (proxy) => {
+            addAnyKey('get', (proxy) => {
                 return (prop) => {
                     var _a;
                     let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
@@ -805,7 +828,7 @@ var AlpineLite;
                     return baseValue;
                 };
             });
-            addAnyKey('$set', (proxy) => {
+            addAnyKey('set', (proxy) => {
                 return (prop, value) => {
                     let exists = (prop in proxy.details_.target);
                     proxy.details_.target[prop] = Proxy.GetNonProxy(value);
@@ -817,7 +840,7 @@ var AlpineLite;
                     return true;
                 };
             });
-            addAnyKey('$delete', (proxy) => {
+            addAnyKey('delete', (proxy) => {
                 return (prop) => {
                     let exists = (prop in proxy.details_.target);
                     if (proxy.details_.parent) {

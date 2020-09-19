@@ -35,6 +35,10 @@ export namespace AlpineLite{
         }
 
         public GetElementId(element: HTMLElement): string{
+            if (!element){
+                return '';
+            }
+            
             let id = element.getAttribute(State.GetIdKey());
             if (!id){//Not initialized
                 id = this.GenerateElementId().toString();
@@ -131,7 +135,7 @@ export namespace AlpineLite{
             }
         }
 
-        public TrapGetAccess(callback: ChangesScope.AlpineLite.ChangeCallbackType, changeCallback?: ChangesScope.AlpineLite.ChangeCallbackType | boolean, element?: HTMLElement): void{
+        public TrapGetAccess(callback: ChangesScope.AlpineLite.ChangeCallbackType, changeCallback?: ChangesScope.AlpineLite.ChangeCallbackType | boolean, element?: HTMLElement, key?: string): void{
             let getAccessStorage: ChangesScope.AlpineLite.GetAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)){//Listen for get events
                 this.changes_.PushGetAccessStorage(getAccessStorage);
@@ -174,13 +178,13 @@ export namespace AlpineLite{
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
                         getAccessStorage[path] = '';
-                        this.changes_.AddListener(path, onChange, element);
+                        this.changes_.AddListener(path, onChange, element, key);
                     }
                 });
             };
 
             paths.forEach((path: string): void => {//Listen for changes on accessed paths
-                this.changes_.AddListener(path, onChange, element);
+                this.changes_.AddListener(path, onChange, element, key);
             });
         }
 
