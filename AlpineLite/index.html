@@ -22,7 +22,7 @@
             </div>
             <div>
                 <span>Name (by $get): </span>
-                <span x-text="$get('name')"></span>
+                <span x-text="$get('name', 'first-segment')"></span>
             </div>
             <div>
                 <span>Email: </span>
@@ -36,6 +36,9 @@
                 <span>Local Name Alt: </span>
                 <span x-text="$localsFor($ancestors[1]).name"></span>
             </div>
+            <div>
+                <input type="text" x-model="name">
+            </div>
             <p x-if="state" x-uninit="$console.log('State was changed to false')">State is true</p>
             <p x-if="!state" x-uninit="$console.log('State was changed to true')">State is false</p>
         </div>
@@ -46,7 +49,7 @@
             </div>
             <div>
                 <span>Other Name: </span>
-                <span x-text="$component('first-segment').name"></span>
+                <span x-text="$get('name', 'first-segment')"></span>
             </div>
             <div>
                 <span>Email: </span>

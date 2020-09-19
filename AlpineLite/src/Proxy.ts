@@ -77,8 +77,8 @@ export namespace AlpineLite{
                         return Proxy.ResolveValue(keyResult);
                     }
                     
-                    if (element && !self.details_.element){
-                        let value = Proxy.Get(element, name, !(prop in target), self.details_.state);
+                    if (element && !self.details_.element && !(prop in target)){
+                        let value = Proxy.Get(element, name, false, self.details_.state);
                         if (!(value instanceof ProxyNoResult)){//Value returned
                             return Proxy.ResolveValue(value);
                         }
@@ -113,7 +113,7 @@ export namespace AlpineLite{
                     let nonProxyValue = Proxy.GetNonProxy(value);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && !self.details_.element && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, !exists, self.details_.state)){
+                    if (element && !self.details_.element && !exists && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, false, self.details_.state)){
                         return true;
                     }
 
@@ -135,7 +135,7 @@ export namespace AlpineLite{
                     let exists = (prop in target);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && !self.details_.element && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
+                    if (element && !self.details_.element && !exists && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
                         return true;
                     }
 
@@ -611,6 +611,28 @@ export namespace AlpineLite{
                 }, null, key);
             };
 
+            let get = (target: any, parts: Array<string>, proxy: Proxy) => {
+                if (parts.length == 0){
+                    return target;
+                }
+
+                let prop = parts[0];
+                if (typeof target !== 'object' || !(prop in target)){
+                    return null;
+                }
+
+                let baseValue = target[prop];
+                let value = Proxy.Create({
+                    target: baseValue,
+                    name: prop,
+                    parent: proxy,
+                    element: null,
+                    state: proxy.details_.state
+                });
+
+                return get((value ? value.proxy_ : baseValue), parts.splice(1), value);
+            };
+
             addRootKey('window', (proxy: Proxy): any => {
                 return window;
             });
@@ -716,7 +738,29 @@ export namespace AlpineLite{
 
             addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
-                    return proxy.details_.state.FindComponent(id);
+                    let component = (proxy.details_.state.FindComponent(id) as Proxy);
+                    return (component ? component.GetProxy() : null);
+                };
+            });
+
+            addRootKey('get', (proxy: Proxy): any => {
+                return (prop: string, component: string): any => {
+                    let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
+                    if (!componentRef){
+                        return null;
+                    }
+
+                    let getAccessStorage = proxy.details_.state.GetChanges().RetrieveGetAccessStorage().Peek();
+                    if (getAccessStorage){
+                        componentRef.details_.state.GetChanges().PushGetAccessStorage(getAccessStorage);
+                    }
+
+                    let value = get(componentRef.proxy_, prop.split('.'), componentRef);
+                    if (getAccessStorage){
+                        componentRef.details_.state.GetChanges().PopGetAccessStorage();
+                    }
+
+                    return value;
                 };
             });
 
@@ -775,64 +819,6 @@ export namespace AlpineLite{
                         callback.call(proxy.GetProxy(), value);
                         return false;
                     });
-                };
-            });
-
-            addAnyKey('get', (proxy: Proxy): any => {
-                return (prop: string): any => {
-                    let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
-                    let value = Proxy.Create({
-                        target: baseValue,
-                        name: prop,
-                        parent: proxy,
-                        element: null,
-                        state: proxy.details_.state
-                    });
-
-                    let changes = proxy.details_.state?.GetChanges();
-                    if (changes){
-                        changes.AddGetAccess(prop, proxy.GetPath(prop));
-                    }
-
-                    if (value){
-                        return value.proxy_;
-                    }
-
-                    return baseValue;
-                };
-            });
-
-            addAnyKey('set', (proxy: Proxy): any => {
-                return (prop: string, value: any): boolean => {
-                    let exists = (prop in proxy.details_.target);
-                    
-                    proxy.details_.target[prop] = Proxy.GetNonProxy(value);
-                    if (prop in proxy.proxies_){
-                        proxy.proxies_[prop].details_.parent = null;
-                        delete proxy.proxies_[prop];
-                    }
-
-                    proxy.Alert_('set', prop.toString(), exists, value, true);
-
-                    return true;
-                };
-            });
-
-            addAnyKey('delete', (proxy: Proxy): any => {
-                return (prop: string): boolean => {
-                    let exists = (prop in proxy.details_.target);
-                    
-                    if (proxy.details_.parent){
-                        proxy.details_.parent.Alert_('delete', proxy.details_.name, exists, { name: prop, value: proxy.details_.target[prop] }, false);
-                    }
-
-                    delete proxy.details_.target[prop];
-                    if (prop in proxy.proxies_){
-                        proxy.proxies_[prop].details_.parent = null;
-                        delete proxy.proxies_[prop];
-                    }
-
-                    return true;
                 };
             });
         }

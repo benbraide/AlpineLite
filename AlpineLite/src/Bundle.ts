@@ -57,44 +57,57 @@ namespace AlpineLite{
         key: string;
     }
 
-    type GetAccessStorage = Record<string, string>;
+    interface GetAccessStorageInfo{
+        name: string;
+        ref: Changes;
+    }
+
+    type GetAccessStorage = Record<string, GetAccessStorageInfo>;
     
     //Changes begin
     export class Changes{
         private listeners_: Record<string, Array<ChangeCallbackInfo>> = {};
         private list_ = new Array<IChange | IBubbledChange>();
         private getAccessStorage_ = new Stack<GetAccessStorage>();
+        private isScheduled_: boolean = false;
 
-        constructor(msDelay: number = 10){
-            this.listeners_ = {};
-            if (0 < msDelay){
-                setInterval(() => {//Periodically watch for changes
-                    if (this.list_.length == 0){
-                        return;
-                    }
-                    
-                    let list = this.list_;
-                    this.list_ = new Array<IChange | IBubbledChange>();
+        private Schedule_(): void{
+            if (this.isScheduled_){
+                return;
+            }
             
-                    for (let item of list){//Traverse changes
-                        if (item.path in this.listeners_){
-                            for (let listener of this.listeners_[item.path]){//Traverse listeners
-                                listener.callback(item);
-                            }
+            this.isScheduled_ = true;
+            setTimeout(() => {//Schedule changes
+                this.isScheduled_ = false;
+                if (this.list_.length == 0){
+                    return;
+                }
+                
+                let list = this.list_;
+                this.list_ = new Array<IChange | IBubbledChange>();
+        
+                for (let item of list){//Traverse changes
+                    if (item.path in this.listeners_){
+                        for (let listener of this.listeners_[item.path]){//Traverse listeners
+                            listener.callback(item);
                         }
                     }
-                }, msDelay);
-            }
+                }
+            }, 0);
         }
 
         public Add(item: IChange | IBubbledChange): void{
             this.list_.push(item);
+            this.Schedule_();
         }
 
         public AddGetAccess(name: string, path: string): void{
             let storage = this.getAccessStorage_.Peek();
             if (storage){
-                storage[path] = name;
+                storage[path] = {
+                    name: name,
+                    ref: this
+                };
             }
         }
 
@@ -331,14 +344,14 @@ namespace AlpineLite{
                 this.changes_.PopGetAccessStorage();//Stop listening for get events
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
-                        getAccessStorage[path] = '';
+                        getAccessStorage[path] = newGetAccessStorage[path];
                         this.changes_.AddListener(path, onChange, element, key);
                     }
                 });
             };
 
             paths.forEach((path: string): void => {//Listen for changes on accessed paths
-                this.changes_.AddListener(path, onChange, element, key);
+                getAccessStorage[path].ref.AddListener(path, onChange, element, key);
             });
         }
 
@@ -421,8 +434,8 @@ namespace AlpineLite{
                         return Proxy.ResolveValue(keyResult);
                     }
                     
-                    if (element && !self.details_.element){
-                        let value = Proxy.Get(element, name, !(prop in target), self.details_.state);
+                    if (element && !self.details_.element && !(prop in target)){
+                        let value = Proxy.Get(element, name, false, self.details_.state);
                         if (!(value instanceof ProxyNoResult)){//Value returned
                             return Proxy.ResolveValue(value);
                         }
@@ -457,7 +470,7 @@ namespace AlpineLite{
                     let nonProxyValue = Proxy.GetNonProxy(value);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && !self.details_.element && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, !exists, self.details_.state)){
+                    if (element && !self.details_.element && !exists && Proxy.Set(self.GetContextElement(), prop.toString(), nonProxyValue, false, self.details_.state)){
                         return true;
                     }
 
@@ -479,7 +492,7 @@ namespace AlpineLite{
                     let exists = (prop in target);
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     
-                    if (element && !self.details_.element && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
+                    if (element && !self.details_.element && !exists && Proxy.Delete(self.GetContextElement(), prop.toString(), self.details_.state)){
                         return true;
                     }
 
@@ -955,6 +968,28 @@ namespace AlpineLite{
                 }, null, key);
             };
 
+            let get = (target: any, parts: Array<string>, proxy: Proxy) => {
+                if (parts.length == 0){
+                    return target;
+                }
+
+                let prop = parts[0];
+                if (typeof target !== 'object' || !(prop in target)){
+                    return null;
+                }
+
+                let baseValue = target[prop];
+                let value = Proxy.Create({
+                    target: baseValue,
+                    name: prop,
+                    parent: proxy,
+                    element: null,
+                    state: proxy.details_.state
+                });
+
+                return get((value ? value.proxy_ : baseValue), parts.splice(1), value);
+            };
+
             addRootKey('window', (proxy: Proxy): any => {
                 return window;
             });
@@ -1060,7 +1095,29 @@ namespace AlpineLite{
 
             addRootKey('component', (proxy: Proxy): any => {
                 return (id: string): any => {
-                    return proxy.details_.state.FindComponent(id);
+                    let component = (proxy.details_.state.FindComponent(id) as Proxy);
+                    return (component ? component.GetProxy() : null);
+                };
+            });
+
+            addRootKey('get', (proxy: Proxy): any => {
+                return (prop: string, component: string): any => {
+                    let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
+                    if (!componentRef){
+                        return null;
+                    }
+
+                    let getAccessStorage = proxy.details_.state.GetChanges().RetrieveGetAccessStorage().Peek();
+                    if (getAccessStorage){
+                        componentRef.details_.state.GetChanges().PushGetAccessStorage(getAccessStorage);
+                    }
+
+                    let value = get(componentRef.proxy_, prop.split('.'), componentRef);
+                    if (getAccessStorage){
+                        componentRef.details_.state.GetChanges().PopGetAccessStorage();
+                    }
+
+                    return value;
                 };
             });
 
@@ -1119,64 +1176,6 @@ namespace AlpineLite{
                         callback.call(proxy.GetProxy(), value);
                         return false;
                     });
-                };
-            });
-
-            addAnyKey('get', (proxy: Proxy): any => {
-                return (prop: string): any => {
-                    let baseValue = ((prop in proxy.details_.target) ? Reflect.get(proxy.details_.target, prop) : null);
-                    let value = Proxy.Create({
-                        target: baseValue,
-                        name: prop,
-                        parent: proxy,
-                        element: null,
-                        state: proxy.details_.state
-                    });
-
-                    let changes = proxy.details_.state?.GetChanges();
-                    if (changes){
-                        changes.AddGetAccess(prop, proxy.GetPath(prop));
-                    }
-
-                    if (value){
-                        return value.proxy_;
-                    }
-
-                    return baseValue;
-                };
-            });
-
-            addAnyKey('set', (proxy: Proxy): any => {
-                return (prop: string, value: any): boolean => {
-                    let exists = (prop in proxy.details_.target);
-                    
-                    proxy.details_.target[prop] = Proxy.GetNonProxy(value);
-                    if (prop in proxy.proxies_){
-                        proxy.proxies_[prop].details_.parent = null;
-                        delete proxy.proxies_[prop];
-                    }
-
-                    proxy.Alert_('set', prop.toString(), exists, value, true);
-
-                    return true;
-                };
-            });
-
-            addAnyKey('delete', (proxy: Proxy): any => {
-                return (prop: string): boolean => {
-                    let exists = (prop in proxy.details_.target);
-                    
-                    if (proxy.details_.parent){
-                        proxy.details_.parent.Alert_('delete', proxy.details_.name, exists, { name: prop, value: proxy.details_.target[prop] }, false);
-                    }
-
-                    delete proxy.details_.target[prop];
-                    if (prop in proxy.proxies_){
-                        proxy.proxies_[prop].details_.parent = null;
-                        delete proxy.proxies_[prop];
-                    }
-
-                    return true;
                 };
             });
         }
@@ -1382,8 +1381,8 @@ namespace AlpineLite{
             Processor.TraverseDirectives(element, (directive: ProcessorDirective): boolean => {
                 return this.DispatchDirective(directive, element);
             }, (attribute: Attr): boolean => {//Check for data binding inside attribute
-                // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
+                // this.state_.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                //     attribute.value = Evaluator.Interpolate(attribute.value, this.state_, elementNode);
                 // }, true);
                 return true;
             });
@@ -2068,7 +2067,7 @@ namespace AlpineLite{
         observer: MutationObserver;
     }
     
-    //Bootstrap begin
+    //Bootstrap begin [a-zA-z]+?\.AlpineLite\.
     export class Bootstrap{
         private dataRegions_ = new Array<DataRegion>();
 
@@ -2077,102 +2076,107 @@ namespace AlpineLite{
             CoreBulkHandler.AddAll(handler);
         }
 
-        public Attach(msDelay: number = 10): void{
-            this.Attach_('data-x-data', msDelay);
-            this.Attach_('x-data', msDelay);
-        }
-
-        private Attach_(attr: string, msDelay: number): void{
-            document.querySelectorAll(`[${attr}]`).forEach((element: Element): void => {
-                let attributeValue = element.getAttribute(attr);
-                if (attributeValue === undefined){//Probably contained inside another region
-                    return;
-                }
-                
-                let state = new State(new Changes(msDelay), (element as HTMLElement), (id: string): any => {
-                    for (let i = 0; i < this.dataRegions_.length; ++i){
-                        if (this.dataRegions_[i].element.id === id || this.dataRegions_[i].element.dataset['id'] === id){
-                            return this.dataRegions_[i].data.GetProxy();
-                        }
+        public Attach(anchors: Array<string> = ['data-x-data', 'x-data']): void{
+            anchors.forEach((anchor: string) => {
+                document.querySelectorAll(`[${anchor}]`).forEach((element: Element): void => {
+                    let attributeValue = element.getAttribute(anchor);
+                    if (attributeValue === undefined){//Probably contained inside another region
+                        return;
                     }
+                    
+                    let state = new State(new Changes(), (element as HTMLElement), (id: string): any => {
+                        if (!id){
+                            return null;
+                        }
+                        
+                        for (let i = 0; i < this.dataRegions_.length; ++i){
+                            if (this.dataRegions_[i].element.id === id || this.dataRegions_[i].element.dataset['id'] === id){
+                                return this.dataRegions_[i].data;
+                            }
+                        }
 
-                    return null;
-                });
+                        return null;
+                    });
 
-                let data = Evaluator.Evaluate(attributeValue, state);
-                if (typeof data === 'function'){
-                    data = (data as () => void)();
-                }
-                
-                let proxyData = Proxy.Create({
-                    target: data,
-                    name: null,
-                    parent: null,
-                    element: null,
-                    state: state
-                });
-
-                if (!proxyData){
-                    proxyData = Proxy.Create({
-                        target: {},
+                    let data = Evaluator.Evaluate(attributeValue, state);
+                    if (typeof data === 'function'){
+                        data = (data as () => void)();
+                    }
+                    
+                    let proxyData = Proxy.Create({
+                        target: data,
                         name: null,
                         parent: null,
                         element: null,
                         state: state
                     });
-                }
-                
-                let handler = new Handler();
-                let processor = new Processor(state, handler);
 
-                let observer = new MutationObserver(function(mutations) {
-                    mutations.forEach((mutation) => {
-                        mutation.removedNodes.forEach((node: Node) => {
-                            if (node.nodeType != 1){
-                                return;
-                            }
-                            
-                            let uninitKey = CoreHandler.GetUninitKey();
-                            if (uninitKey in node){//Execute uninit callback
-                                (node[uninitKey] as () => void)();
-                                delete node[uninitKey];
-                            }
-
-                            CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
+                    if (!proxyData){
+                        proxyData = Proxy.Create({
+                            target: {},
+                            name: null,
+                            parent: null,
+                            element: null,
+                            state: state
                         });
+                    }
+                    
+                    let handler = new Handler();
+                    let processor = new Processor(state, handler);
 
-                        mutation.addedNodes.forEach((node: Node) => {
-                            if (node?.nodeType !== 1){
-                                return;
-                            }
-                            
-                            processor.All((node as HTMLElement), {
-                                checkTemplate: true,
-                                checkDocument: false
+                    let observer = new MutationObserver((mutations) => {
+                        mutations.forEach((mutation) => {
+                            mutation.removedNodes.forEach((node: Node) => {
+                                if (node?.nodeType !== 1){
+                                    return;
+                                }
+
+                                this.dataRegions_.forEach((region: DataRegion) => {
+                                    region.state.GetChanges().RemoveListeners(node as HTMLElement);
+                                });
+                                
+                                let uninitKey = CoreHandler.GetUninitKey();
+                                if (uninitKey in node){//Execute uninit callback
+                                    (node[uninitKey] as () => void)();
+                                    delete node[uninitKey];
+                                }
+
+                                CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
+                            });
+
+                            mutation.addedNodes.forEach((node: Node) => {
+                                if (node?.nodeType !== 1){
+                                    return;
+                                }
+
+                                processor.All((node as HTMLElement), {
+                                    checkTemplate: true,
+                                    checkDocument: false
+                                });
                             });
                         });
                     });
-                });
-                
-                state.PushValueContext(proxyData.GetProxy());
-                this.dataRegions_.push({
-                    element: (element as HTMLElement),
-                    data: proxyData,
-                    state: state,
-                    processor: processor,
-                    handler: handler,
-                    observer: observer
-                });
+                    
+                    state.PushValueContext(proxyData.GetProxy());
+                    this.dataRegions_.push({
+                        element: (element as HTMLElement),
+                        data: proxyData,
+                        state: state,
+                        processor: processor,
+                        handler: handler,
+                        observer: observer
+                    });
 
-                Proxy.AddCoreSpecialKeys();
-                CoreBulkHandler.AddAll(handler);
-                CoreHandler.AddAll(handler);
+                    Proxy.AddCoreSpecialKeys();
+                    CoreBulkHandler.AddAll(handler);
+                    CoreHandler.AddAll(handler);
 
-                processor.All(element as HTMLElement);
-                observer.observe(element, {
-                    childList: true,
-                    subtree: true,
-                    characterData: false,
+                    processor.All((element as HTMLElement));
+                    observer.observe(element, {
+                        childList: true,
+                        subtree: true,
+                        characterData: false,
+                    });
                 });
             });
         }

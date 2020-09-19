@@ -22,43 +22,56 @@ export namespace AlpineLite{
         key: string;
     }
 
-    export type GetAccessStorage = Record<string, string>;
+    export interface GetAccessStorageInfo{
+        name: string;
+        ref: Changes;
+    }
+
+    export type GetAccessStorage = Record<string, GetAccessStorageInfo>;
     
     export class Changes{
         private listeners_: Record<string, Array<ChangeCallbackInfo>> = {};
         private list_ = new Array<IChange | IBubbledChange>();
         private getAccessStorage_ = new StackScope.AlpineLite.Stack<GetAccessStorage>();
+        private isScheduled_: boolean = false;
 
-        constructor(msDelay: number = 10){
-            this.listeners_ = {};
-            if (0 < msDelay){
-                setInterval(() => {//Periodically watch for changes
-                    if (this.list_.length == 0){
-                        return;
-                    }
-                    
-                    let list = this.list_;
-                    this.list_ = new Array<IChange | IBubbledChange>();
+        private Schedule_(): void{
+            if (this.isScheduled_){
+                return;
+            }
             
-                    for (let item of list){//Traverse changes
-                        if (item.path in this.listeners_){
-                            for (let listener of this.listeners_[item.path]){//Traverse listeners
-                                listener.callback(item);
-                            }
+            this.isScheduled_ = true;
+            setTimeout(() => {//Schedule changes
+                this.isScheduled_ = false;
+                if (this.list_.length == 0){
+                    return;
+                }
+                
+                let list = this.list_;
+                this.list_ = new Array<IChange | IBubbledChange>();
+        
+                for (let item of list){//Traverse changes
+                    if (item.path in this.listeners_){
+                        for (let listener of this.listeners_[item.path]){//Traverse listeners
+                            listener.callback(item);
                         }
                     }
-                }, msDelay);
-            }
+                }
+            }, 0);
         }
 
         public Add(item: IChange | IBubbledChange): void{
             this.list_.push(item);
+            this.Schedule_();
         }
 
         public AddGetAccess(name: string, path: string): void{
             let storage = this.getAccessStorage_.Peek();
             if (storage){
-                storage[path] = name;
+                storage[path] = {
+                    name: name,
+                    ref: this
+                };
             }
         }
 

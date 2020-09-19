@@ -177,14 +177,14 @@ export namespace AlpineLite{
                 this.changes_.PopGetAccessStorage();//Stop listening for get events
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
-                        getAccessStorage[path] = '';
+                        getAccessStorage[path] = newGetAccessStorage[path];
                         this.changes_.AddListener(path, onChange, element, key);
                     }
                 });
             };
 
             paths.forEach((path: string): void => {//Listen for changes on accessed paths
-                this.changes_.AddListener(path, onChange, element, key);
+                getAccessStorage[path].ref.AddListener(path, onChange, element, key);
             });
         }
 
