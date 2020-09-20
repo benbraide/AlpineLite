@@ -11,6 +11,12 @@ export namespace AlpineLite{
         StaticBind,
         DebugEnabled,
     }
+
+    export interface ExternalCallbacks{
+        componentFinder?: (id: string) => any;
+        isEqual?: (first: any, second: any) => boolean;
+        deepCopy?: (target: any) => any;
+    }
     
     export class State{
         private elementId_: number = 0;
@@ -20,14 +26,22 @@ export namespace AlpineLite{
         private localKeys_ = new Array<Record<string, ValueScope.AlpineLite.Value>>();
         private flags_ = new Map<StateFlag, StackScope.AlpineLite.Stack<any>>();
         
-        constructor(private changes_: ChangesScope.AlpineLite.Changes, private rootElement_: HTMLElement, private componentFinder_: (id: string) => any){
+        constructor(private changes_: ChangesScope.AlpineLite.Changes, private rootElement_: HTMLElement, private externalCallbacks_: ExternalCallbacks){
             this.localKeys_['$locals'] = new ValueScope.AlpineLite.Value((valueContext: any) => {
                 return null;
             });
         }
 
         public FindComponent(id: string): any{
-            return (this.componentFinder_ ? this.componentFinder_(id) : null);
+            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id) : null);
+        }
+
+        public IsEqual(first: any, second: any): boolean{
+            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second) : (first === second));
+        }
+
+        public DeepCopy(target: any): any{
+            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target) : target);
         }
 
         public GenerateElementId(): number{

@@ -19,6 +19,26 @@ export namespace AlpineLite{
     
     export class Bootstrap{
         private dataRegions_ = new Array<DataRegion>();
+        private externalCallbacks_: StateScope.AlpineLite.ExternalCallbacks;
+
+        constructor(externalCallbacks: StateScope.AlpineLite.ExternalCallbacks){
+            this.externalCallbacks_ = (externalCallbacks || {});
+            if (!this.externalCallbacks_.componentFinder){
+                this.externalCallbacks_.componentFinder = (id: string): any => {
+                    if (!id){
+                        return null;
+                    }
+                    
+                    for (let i = 0; i < this.dataRegions_.length; ++i){
+                        if (this.dataRegions_[i].element.id === id || this.dataRegions_[i].element.dataset['id'] === id){
+                            return this.dataRegions_[i].data;
+                        }
+                    }
+
+                    return null;
+                };
+            }
+        }
 
         public InitializeHandlers(handler: HandlerScope.AlpineLite.Handler): void{
             CoreHandlerScope.AlpineLite.CoreHandler.AddAll(handler);
@@ -33,21 +53,9 @@ export namespace AlpineLite{
                         return;
                     }
                     
-                    let state = new StateScope.AlpineLite.State(new ChangesScope.AlpineLite.Changes(), (element as HTMLElement), (id: string): any => {
-                        if (!id){
-                            return null;
-                        }
-                        
-                        for (let i = 0; i < this.dataRegions_.length; ++i){
-                            if (this.dataRegions_[i].element.id === id || this.dataRegions_[i].element.dataset['id'] === id){
-                                return this.dataRegions_[i].data;
-                            }
-                        }
-
-                        return null;
-                    });
-
+                    let state = new StateScope.AlpineLite.State(new ChangesScope.AlpineLite.Changes(), (element as HTMLElement), this.externalCallbacks_);
                     let name = `__ar${this.dataRegions_.length}__`;
+                    
                     let proxyData = ProxyScope.AlpineLite.Proxy.Create({
                         target: {},
                         name: name,

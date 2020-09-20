@@ -67,6 +67,7 @@ export namespace AlpineLite{
             let isBoolean = (booleanAttributes.indexOf(directive.key) != -1);
             let isDisabled = (isBoolean && directive.key == 'disabled');
 
+            let attr = directive.parts.splice(1).join('-');
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 if (isBoolean){
                     if (EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element)){
@@ -74,18 +75,18 @@ export namespace AlpineLite{
                             element.classList.add(CoreBulkHandler.GetDisabledClassKey());
                         }
                         else{
-                            element.setAttribute(directive.parts[1], directive.parts[1]);
+                            element.setAttribute(attr, attr);
                         }
                     }
                     else if (isDisabled && element.tagName === 'A'){
                         element.classList.remove(CoreBulkHandler.GetDisabledClassKey());
                     }
                     else{
-                        element.removeAttribute(directive.parts[1]);
+                        element.removeAttribute(attr);
                     }
                 }
                 else{
-                    element.setAttribute(directive.parts[1], EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element));
+                    element.setAttribute(attr, EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element));
                 }
             }, true);
 

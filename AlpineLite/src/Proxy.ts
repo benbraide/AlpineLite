@@ -69,10 +69,14 @@ export namespace AlpineLite{
                         return Reflect.get(target, prop);
                     }
                     
-                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     let name = prop.toString();
+                    if (name === '__AlpineLiteTarget__'){
+                        return target;
+                    }
 
+                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     let keyResult = Proxy.HandleSpecialKey(name, self);
+
                     if (!(keyResult instanceof ProxyNoResult)){//Value returned
                         return Proxy.ResolveValue(keyResult);
                     }
@@ -433,6 +437,15 @@ export namespace AlpineLite{
             return target;
         }
 
+        public static GetBaseValue(target: any): any{
+            target = Proxy.GetNonProxy(target);
+            if (!target || typeof target !== 'object'){
+                return null;
+            }
+
+            return (('__AlpineLiteTarget__' in target) ? target['__AlpineLiteTarget__'] : target);
+        }
+
         public static ResolveValue(value: any): any{
             if (value instanceof ValueScope.AlpineLite.Value){
                 return (value as ValueScope.AlpineLite.Value).Get();
@@ -534,44 +547,6 @@ export namespace AlpineLite{
                 return localsProxy.GetProxy();
             };
 
-            let isEqual = (first: any, second: any) => {
-                let firstType = (typeof first), secondType = (typeof second);
-                if (firstType !== secondType){
-                    return false;
-                }
-
-                if (Array.isArray(first)){
-                    if (first.length != second.length){
-                        return false;
-                    }
-
-                    for (let i = 0; i < first.length; ++i){
-                        if (!isEqual(first[i], second[i])){
-                            return false;
-                        }
-                    }
-
-                    return true;
-                }
-
-                if (firstType === 'object'){
-                    let firstKeys = Object.keys(first), secondKeys = Object.keys(second);
-                    if (!isEqual(firstKeys, secondKeys)){
-                        return false;
-                    }
-
-                    for (let i = 0; i < firstKeys.length; ++i){
-                        if (!isEqual(first[firstKeys[i]], second[firstKeys[i]])){
-                            return false;
-                        }
-                    }
-
-                    return true;
-                }
-                
-                return (first === second);
-            };
-
             let watch = (target: string, proxy: Proxy, callback: (value: any) => boolean) => {
                 let stoppedWatching = false;
                 let previousValue: any = null;
@@ -585,6 +560,7 @@ export namespace AlpineLite{
                 
                 proxy.details_.state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                     previousValue = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
+                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(previousValue));
                     stoppedWatching = !callback(previousValue);
                 }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                     if (stoppedWatching){
@@ -597,7 +573,7 @@ export namespace AlpineLite{
                     }
                     
                     let value = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
-                    if (isEqual(value, previousValue)){
+                    if (proxy.details_.state.IsEqual(value, previousValue)){
                         return;
                     }
                     
@@ -606,7 +582,7 @@ export namespace AlpineLite{
                         key = '';
                     }
                     
-                    previousValue = value;
+                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(value));
                     stoppedWatching = !callback(value);
                 }, null, key);
             };
@@ -654,6 +630,46 @@ export namespace AlpineLite{
                 return getProp(info[1], info[0].proxy_, info[0])[1];
             };
 
+            let call = (target: any, parts: Array<string>, proxy: Proxy, ...args: any[]) => {
+                let info = reduce(target, parts, proxy);
+                if (!info){
+                    return null;
+                }
+
+                let callback = info[0].proxy_[info[1]];
+                if (typeof callback !== 'function'){
+                    return null;
+                }
+
+                return (callback as (...fargs: any[]) => any).call(info[0].proxy_, ...args);
+            };
+
+            let getOrCall = (prop: string, component: string, isGet: boolean, proxy: Proxy, ...args: any[]): any => {
+                let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
+                if (!componentRef){
+                    return null;
+                }
+
+                let getAccessStorage = proxy.details_.state.GetChanges().RetrieveGetAccessStorage().Peek();
+                if (getAccessStorage){
+                    componentRef.details_.state.GetChanges().PushGetAccessStorage(getAccessStorage);
+                }
+
+                let value: any;
+                if (isGet){
+                    value = get(componentRef.proxy_, prop.split('.'), componentRef);
+                }
+                else{
+                    value = call(componentRef.proxy_, prop.split('.'), componentRef, ...args);
+                }
+
+                if (getAccessStorage){
+                    componentRef.details_.state.GetChanges().PopGetAccessStorage();
+                }
+
+                return value;
+            };
+            
             let tie = (name: string, prop: string, component: string, proxy: Proxy, bidirectional: boolean): void => {
                 let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
                 if (!componentRef){
@@ -807,22 +823,13 @@ export namespace AlpineLite{
 
             addRootKey('get', (proxy: Proxy): any => {
                 return (prop: string, component: string): any => {
-                    let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
-                    if (!componentRef){
-                        return null;
-                    }
+                    return getOrCall(prop, component, true, proxy);
+                };
+            });
 
-                    let getAccessStorage = proxy.details_.state.GetChanges().RetrieveGetAccessStorage().Peek();
-                    if (getAccessStorage){
-                        componentRef.details_.state.GetChanges().PushGetAccessStorage(getAccessStorage);
-                    }
-
-                    let value = get(componentRef.proxy_, prop.split('.'), componentRef);
-                    if (getAccessStorage){
-                        componentRef.details_.state.GetChanges().PopGetAccessStorage();
-                    }
-
-                    return value;
+            addRootKey('call', (proxy: Proxy): any => {
+                return (prop: string, component: string, ...args: any[]): any => {
+                    return getOrCall(prop, component, false, proxy, ...args);
                 };
             });
 

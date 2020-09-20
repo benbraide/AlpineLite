@@ -61,4 +61,3 @@ var AlpineLite;
     }
     AlpineLite.ScrollTop = ScrollTop;
 })(AlpineLite || (AlpineLite = {}));
-//# sourceMappingURL=ScrollTop.js.map
