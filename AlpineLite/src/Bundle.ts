@@ -929,7 +929,7 @@ namespace AlpineLite{
                 return (first === second);
             };
 
-            let watch = (target: string, proxy: Proxy, callback: (value: any) => {}) => {
+            let watch = (target: string, proxy: Proxy, callback: (value: any) => boolean) => {
                 let stoppedWatching = false;
                 let previousValue: any = null;
 
@@ -968,12 +968,7 @@ namespace AlpineLite{
                 }, null, key);
             };
 
-            let get = (target: any, parts: Array<string>, proxy: Proxy) => {
-                if (parts.length == 0){
-                    return target;
-                }
-
-                let prop = parts[0];
+            let getProp = (prop: string, target: any, proxy: Proxy): [Proxy, any] => {
                 if (typeof target !== 'object' || !(prop in target)){
                     return null;
                 }
@@ -987,7 +982,74 @@ namespace AlpineLite{
                     state: proxy.details_.state
                 });
 
-                return get((value ? value.proxy_ : baseValue), parts.splice(1), value);
+                return [value, (value ? value.proxy_ : baseValue)];
+            };
+
+            let reduce = (target: any, parts: Array<string>, proxy: Proxy): [Proxy, string] => {
+                if (parts.length == 0){
+                    return null;
+                }
+
+                if (parts.length == 1){
+                    return [proxy, parts[0]];
+                }
+
+                let info = getProp(parts[0], target, proxy);
+                if (!info[0]){
+                    return null;
+                }
+
+                return reduce(info[0].proxy_, parts.splice(1), info[0]);
+            };
+
+            let get = (target: any, parts: Array<string>, proxy: Proxy) => {
+                let info = reduce(target, parts, proxy);
+                if (!info){
+                    return null;
+                }
+
+                return getProp(info[1], info[0].proxy_, info[0])[1];
+            };
+
+            let tie = (name: string, prop: string, component: string, proxy: Proxy, bidirectional: boolean): void => {
+                let componentRef = (proxy.details_.state.FindComponent(component) as Proxy);
+                if (!componentRef){
+                    return;
+                }
+
+                let info = reduce(componentRef.proxy_, prop.split('.'), componentRef);
+                if (!info){
+                    return;
+                }
+
+                watch(info[1], info[0], (value: any): boolean => {
+                    let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
+                    if (!targetInfo){
+                        return false;
+                    }
+
+                    targetInfo[0].proxy_[targetInfo[1]] = value;
+                    return true;
+                });
+
+                if (!bidirectional){
+                    return;
+                }
+
+                let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
+                if (!targetInfo){
+                    return;
+                }
+
+                watch(targetInfo[1], targetInfo[0], (value: any): boolean => {
+                    let sourceInfo = reduce(componentRef.proxy_, prop.split('.'), componentRef);
+                    if (!sourceInfo){
+                        return false;
+                    }
+
+                    sourceInfo[0].proxy_[sourceInfo[1]] = value;
+                    return true;
+                });
             };
 
             addRootKey('window', (proxy: Proxy): any => {
@@ -1118,6 +1180,18 @@ namespace AlpineLite{
                     }
 
                     return value;
+                };
+            });
+
+            addRootKey('tie', (proxy: Proxy): any => {
+                return (name: string, prop: string, component: string): void => {
+                    tie(name, prop, component, proxy, false);
+                };
+            });
+
+            addRootKey('btie', (proxy: Proxy): any => {
+                return (name: string, prop: string, component: string): void => {
+                    tie(name, prop, component, proxy, true);
                 };
             });
 
@@ -2103,9 +2177,10 @@ namespace AlpineLite{
                         data = (data as () => void)();
                     }
                     
+                    let name = `__ar${this.dataRegions_.length}__`;
                     let proxyData = Proxy.Create({
                         target: data,
-                        name: null,
+                        name: name,
                         parent: null,
                         element: null,
                         state: state
@@ -2114,7 +2189,7 @@ namespace AlpineLite{
                     if (!proxyData){
                         proxyData = Proxy.Create({
                             target: {},
-                            name: null,
+                            name: name,
                             parent: null,
                             element: null,
                             state: state

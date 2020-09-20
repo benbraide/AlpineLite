@@ -52,9 +52,10 @@ export namespace AlpineLite{
                         data = (data as () => void)();
                     }
                     
+                    let name = `__ar${this.dataRegions_.length}__`;
                     let proxyData = ProxyScope.AlpineLite.Proxy.Create({
                         target: data,
-                        name: null,
+                        name: name,
                         parent: null,
                         element: null,
                         state: state
@@ -63,7 +64,7 @@ export namespace AlpineLite{
                     if (!proxyData){
                         proxyData = ProxyScope.AlpineLite.Proxy.Create({
                             target: {},
-                            name: null,
+                            name: name,
                             parent: null,
                             element: null,
                             state: state

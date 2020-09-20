@@ -756,11 +756,7 @@ var AlpineLite;
                     stoppedWatching = !callback(value);
                 }, null, key);
             };
-            let get = (target, parts, proxy) => {
-                if (parts.length == 0) {
-                    return target;
-                }
-                let prop = parts[0];
+            let getProp = (prop, target, proxy) => {
                 if (typeof target !== 'object' || !(prop in target)) {
                     return null;
                 }
@@ -772,7 +768,60 @@ var AlpineLite;
                     element: null,
                     state: proxy.details_.state
                 });
-                return get((value ? value.proxy_ : baseValue), parts.splice(1), value);
+                return [value, (value ? value.proxy_ : baseValue)];
+            };
+            let reduce = (target, parts, proxy) => {
+                if (parts.length == 0) {
+                    return null;
+                }
+                if (parts.length == 1) {
+                    return [proxy, parts[0]];
+                }
+                let info = getProp(parts[0], target, proxy);
+                if (!info[0]) {
+                    return null;
+                }
+                return reduce(info[0].proxy_, parts.splice(1), info[0]);
+            };
+            let get = (target, parts, proxy) => {
+                let info = reduce(target, parts, proxy);
+                if (!info) {
+                    return null;
+                }
+                return getProp(info[1], info[0].proxy_, info[0])[1];
+            };
+            let tie = (name, prop, component, proxy, bidirectional) => {
+                let componentRef = proxy.details_.state.FindComponent(component);
+                if (!componentRef) {
+                    return;
+                }
+                let info = reduce(componentRef.proxy_, prop.split('.'), componentRef);
+                if (!info) {
+                    return;
+                }
+                watch(info[1], info[0], (value) => {
+                    let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
+                    if (!targetInfo) {
+                        return false;
+                    }
+                    targetInfo[0].proxy_[targetInfo[1]] = value;
+                    return true;
+                });
+                if (!bidirectional) {
+                    return;
+                }
+                let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
+                if (!targetInfo) {
+                    return;
+                }
+                watch(targetInfo[1], targetInfo[0], (value) => {
+                    let sourceInfo = reduce(componentRef.proxy_, prop.split('.'), componentRef);
+                    if (!sourceInfo) {
+                        return false;
+                    }
+                    sourceInfo[0].proxy_[sourceInfo[1]] = value;
+                    return true;
+                });
             };
             addRootKey('window', (proxy) => {
                 return window;
@@ -877,6 +926,16 @@ var AlpineLite;
                         componentRef.details_.state.GetChanges().PopGetAccessStorage();
                     }
                     return value;
+                };
+            });
+            addRootKey('tie', (proxy) => {
+                return (name, prop, component) => {
+                    tie(name, prop, component, proxy, false);
+                };
+            });
+            addRootKey('btie', (proxy) => {
+                return (name, prop, component) => {
+                    tie(name, prop, component, proxy, true);
                 };
             });
             addRootKey('locals', (proxy) => {
@@ -1677,9 +1736,10 @@ var AlpineLite;
                     if (typeof data === 'function') {
                         data = data();
                     }
+                    let name = `__ar${this.dataRegions_.length}__`;
                     let proxyData = Proxy.Create({
                         target: data,
-                        name: null,
+                        name: name,
                         parent: null,
                         element: null,
                         state: state
@@ -1687,7 +1747,7 @@ var AlpineLite;
                     if (!proxyData) {
                         proxyData = Proxy.Create({
                             target: {},
-                            name: null,
+                            name: name,
                             parent: null,
                             element: null,
                             state: state

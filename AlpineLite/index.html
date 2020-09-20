@@ -47,9 +47,13 @@
                 <span>Name: </span>
                 <span x-text="name"></span>
             </div>
-            <div>
+            <div x-init="$tie('otherName', 'name', 'first-segment')">
                 <span>Other Name: </span>
-                <span x-text="$get('name', 'first-segment')"></span>
+                <span x-text="otherName"></span>
+            </div>
+            <div x-init="$btie('biOtherName', 'name', 'first-segment')">
+                <span>Bi Other Name: </span>
+                <span x-text="biOtherName"></span>
             </div>
             <div>
                 <span>Email: </span>
