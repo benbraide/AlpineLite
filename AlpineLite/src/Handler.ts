@@ -5,6 +5,7 @@ export namespace AlpineLite{
         Nil,
         Handled,
         Rejected,
+        SkipBulk,
     }
 
     export interface ProcessorDirective{
@@ -25,13 +26,25 @@ export namespace AlpineLite{
             this.directiveHandlers_[directive] = handler;
         }
 
+        public GetDirectiveHandler(directive: string): DirectiveHandler{
+            return ((directive in this.directiveHandlers_) ? this.directiveHandlers_[directive] : null);
+        }
+
         public AddBulkDirectiveHandler(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.push(handler);
+        }
+
+        public AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
+            this.bulkDirectiveHandlers_.unshift(handler);
         }
 
         public HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerReturn{
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
+                if (result == HandlerReturn.SkipBulk){
+                    break;
+                }
+                
                 if (result != HandlerReturn.Nil){//Handled or rejected
                     return result;
                 }

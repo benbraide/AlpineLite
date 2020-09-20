@@ -9,6 +9,9 @@
         x-scroll-top{
             color: aqua;
         }
+        .cyan{
+            background-color: cyan !important;
+        }
     </style>
 </head>
 <body>
@@ -67,6 +70,7 @@
                 <span>Added: </span>
                 <span x-text="added"></span>
             </div>
+            <div style="background-color: red; height: 100px;" x-data="{width: 100}" x-style-width="`${width}px`" x-class="{cyan: (width == 200)}" x-click="width = 200 - width + 100"></div>
         </div>
     </div>
     <script src="./dist/Bundle.js"></script>

@@ -1391,6 +1391,7 @@ namespace AlpineLite{
         Nil,
         Handled,
         Rejected,
+        SkipBulk,
     }
 
     interface ProcessorDirective{
@@ -1412,13 +1413,25 @@ namespace AlpineLite{
             this.directiveHandlers_[directive] = handler;
         }
 
+        public GetDirectiveHandler(directive: string): DirectiveHandler{
+            return ((directive in this.directiveHandlers_) ? this.directiveHandlers_[directive] : null);
+        }
+
         public AddBulkDirectiveHandler(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.push(handler);
+        }
+
+        public AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
+            this.bulkDirectiveHandlers_.unshift(handler);
         }
 
         public HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
+                if (result == HandlerReturn.SkipBulk){
+                    break;
+                }
+                
                 if (result != HandlerReturn.Nil){//Handled or rejected
                     return result;
                 }
@@ -1702,10 +1715,12 @@ namespace AlpineLite{
                 return HandlerReturn.Nil;
             }
 
-            let isBoolean = (booleanAttributes.indexOf(directive.key) != -1);
-            let isDisabled = (isBoolean && directive.key == 'disabled');
-
             let attr = directive.parts.splice(1).join('-');
+            let key = (directive.key.substr(4, 1).toLowerCase() +  directive.key.substr(5));//Skip 'attr'
+            
+            let isBoolean = (booleanAttributes.indexOf(key) != -1);
+            let isDisabled = (isBoolean && key == 'disabled');
+
             state.TrapGetAccess((change: IChange | IBubbledChange): void => {
                 if (isBoolean){
                     if (Evaluator.Evaluate(directive.value, state, element)){
@@ -1731,6 +1746,23 @@ namespace AlpineLite{
             return HandlerReturn.Handled;
         }
 
+        public static Style(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            if (directive.parts[0] !== 'style'){
+                return HandlerReturn.Nil;
+            }
+
+            let key = (directive.key.substr(5, 1).toLowerCase() +  directive.key.substr(6));//Skip 'style'
+            if (!(key in element.style)){//Unrecognized style
+                return HandlerReturn.Nil;
+            }
+
+            state.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                element.style[key] = Evaluator.Evaluate(directive.value, state, element);
+            }, true);
+
+            return HandlerReturn.Handled;
+        }
+        
         public static Event(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             const knownEvents = [
                 'blur', 'change', 'click', 'contextmenu', 'context-menu', 'dblclick', 'dbl-click', 'focus', 'focusin', 'focus-in', 'focusout', 'focus-out',
@@ -1809,6 +1841,7 @@ namespace AlpineLite{
 
         public static AddAll(handler: Handler){
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
 
@@ -1937,6 +1970,24 @@ namespace AlpineLite{
                 Evaluator.Evaluate(`(${directive.value})=this`, state, element);
             }
 
+            return HandlerReturn.Handled;
+        }
+
+        public static Class(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            state.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                let entries = Evaluator.Evaluate(directive.value, state, element);
+                for (let key in entries){
+                    if (entries[key]){
+                        if (!element.classList.contains(key)){
+                            element.classList.add(key);
+                        }
+                    }
+                    else{
+                        element.classList.remove(key);
+                    }
+                }
+            }, true);
+            
             return HandlerReturn.Handled;
         }
 
@@ -2167,6 +2218,7 @@ namespace AlpineLite{
             handler.AddDirectiveHandler('id', CoreHandler.Id);
             handler.AddDirectiveHandler('ref', CoreHandler.Ref);
 
+            handler.AddDirectiveHandler('class', CoreHandler.Class);
             handler.AddDirectiveHandler('text', CoreHandler.Text);
             handler.AddDirectiveHandler('html', CoreHandler.Html);
 

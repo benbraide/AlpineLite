@@ -127,6 +127,24 @@ export namespace AlpineLite{
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
+        public static Class(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                let entries = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+                for (let key in entries){
+                    if (entries[key]){
+                        if (!element.classList.contains(key)){
+                            element.classList.add(key);
+                        }
+                    }
+                    else{
+                        element.classList.remove(key);
+                    }
+                }
+            }, true);
+            
+            return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
         public static Text(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             CoreHandler.Text_(directive, element, state, {
                 isHtml: false,
@@ -354,6 +372,7 @@ export namespace AlpineLite{
             handler.AddDirectiveHandler('id', CoreHandler.Id);
             handler.AddDirectiveHandler('ref', CoreHandler.Ref);
 
+            handler.AddDirectiveHandler('class', CoreHandler.Class);
             handler.AddDirectiveHandler('text', CoreHandler.Text);
             handler.AddDirectiveHandler('html', CoreHandler.Html);
 

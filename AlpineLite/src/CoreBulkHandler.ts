@@ -64,10 +64,12 @@ export namespace AlpineLite{
                 return HandlerScope.AlpineLite.HandlerReturn.Nil;
             }
 
-            let isBoolean = (booleanAttributes.indexOf(directive.key) != -1);
-            let isDisabled = (isBoolean && directive.key == 'disabled');
-
             let attr = directive.parts.splice(1).join('-');
+            let key = (directive.key.substr(4, 1).toLowerCase() +  directive.key.substr(5));//Skip 'attr'
+            
+            let isBoolean = (booleanAttributes.indexOf(key) != -1);
+            let isDisabled = (isBoolean && key == 'disabled');
+
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 if (isBoolean){
                     if (EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element)){
@@ -93,6 +95,23 @@ export namespace AlpineLite{
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
+        public static Style(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            if (directive.parts[0] !== 'style'){
+                return HandlerScope.AlpineLite.HandlerReturn.Nil;
+            }
+
+            let key = (directive.key.substr(5, 1).toLowerCase() +  directive.key.substr(6));//Skip 'style'
+            if (!(key in element.style)){//Unrecognized style
+                return HandlerScope.AlpineLite.HandlerReturn.Nil;
+            }
+
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                element.style[key] = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+            }, true);
+
+            return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+        
         public static Event(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             const knownEvents = [
                 'blur', 'change', 'click', 'contextmenu', 'context-menu', 'dblclick', 'dbl-click', 'focus', 'focusin', 'focus-in', 'focusout', 'focus-out',
@@ -171,6 +190,7 @@ export namespace AlpineLite{
 
         public static AddAll(handler: HandlerScope.AlpineLite.Handler){
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
 

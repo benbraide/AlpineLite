@@ -1099,6 +1099,7 @@ var AlpineLite;
         HandlerReturn[HandlerReturn["Nil"] = 0] = "Nil";
         HandlerReturn[HandlerReturn["Handled"] = 1] = "Handled";
         HandlerReturn[HandlerReturn["Rejected"] = 2] = "Rejected";
+        HandlerReturn[HandlerReturn["SkipBulk"] = 3] = "SkipBulk";
     })(HandlerReturn || (HandlerReturn = {}));
     //Handler begin
     class Handler {
@@ -1109,12 +1110,21 @@ var AlpineLite;
         AddDirectiveHandler(directive, handler) {
             this.directiveHandlers_[directive] = handler;
         }
+        GetDirectiveHandler(directive) {
+            return ((directive in this.directiveHandlers_) ? this.directiveHandlers_[directive] : null);
+        }
         AddBulkDirectiveHandler(handler) {
             this.bulkDirectiveHandlers_.push(handler);
+        }
+        AddBulkDirectiveHandlerInFront(handler) {
+            this.bulkDirectiveHandlers_.unshift(handler);
         }
         HandleDirective(directive, element, state) {
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i) {
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
+                if (result == HandlerReturn.SkipBulk) {
+                    break;
+                }
                 if (result != HandlerReturn.Nil) { //Handled or rejected
                     return result;
                 }
@@ -1343,9 +1353,10 @@ var AlpineLite;
             if (directive.parts[0] !== 'attr') {
                 return HandlerReturn.Nil;
             }
-            let isBoolean = (booleanAttributes.indexOf(directive.key) != -1);
-            let isDisabled = (isBoolean && directive.key == 'disabled');
             let attr = directive.parts.splice(1).join('-');
+            let key = (directive.key.substr(4, 1).toLowerCase() + directive.key.substr(5)); //Skip 'attr'
+            let isBoolean = (booleanAttributes.indexOf(key) != -1);
+            let isDisabled = (isBoolean && key == 'disabled');
             state.TrapGetAccess((change) => {
                 if (isBoolean) {
                     if (Evaluator.Evaluate(directive.value, state, element)) {
@@ -1366,6 +1377,19 @@ var AlpineLite;
                 else {
                     element.setAttribute(attr, Evaluator.Evaluate(directive.value, state, element));
                 }
+            }, true);
+            return HandlerReturn.Handled;
+        }
+        static Style(directive, element, state) {
+            if (directive.parts[0] !== 'style') {
+                return HandlerReturn.Nil;
+            }
+            let key = (directive.key.substr(5, 1).toLowerCase() + directive.key.substr(6)); //Skip 'style'
+            if (!(key in element.style)) { //Unrecognized style
+                return HandlerReturn.Nil;
+            }
+            state.TrapGetAccess((change) => {
+                element.style[key] = Evaluator.Evaluate(directive.value, state, element);
             }, true);
             return HandlerReturn.Handled;
         }
@@ -1437,6 +1461,7 @@ var AlpineLite;
         }
         static AddAll(handler) {
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
             handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
         static GetDisabledClassKey() {
@@ -1534,6 +1559,22 @@ var AlpineLite;
             else {
                 Evaluator.Evaluate(`(${directive.value})=this`, state, element);
             }
+            return HandlerReturn.Handled;
+        }
+        static Class(directive, element, state) {
+            state.TrapGetAccess((change) => {
+                let entries = Evaluator.Evaluate(directive.value, state, element);
+                for (let key in entries) {
+                    if (entries[key]) {
+                        if (!element.classList.contains(key)) {
+                            element.classList.add(key);
+                        }
+                    }
+                    else {
+                        element.classList.remove(key);
+                    }
+                }
+            }, true);
             return HandlerReturn.Handled;
         }
         static Text(directive, element, state) {
@@ -1729,6 +1770,7 @@ var AlpineLite;
             handler.AddDirectiveHandler('locals', CoreHandler.Locals);
             handler.AddDirectiveHandler('id', CoreHandler.Id);
             handler.AddDirectiveHandler('ref', CoreHandler.Ref);
+            handler.AddDirectiveHandler('class', CoreHandler.Class);
             handler.AddDirectiveHandler('text', CoreHandler.Text);
             handler.AddDirectiveHandler('html', CoreHandler.Html);
             handler.AddDirectiveHandler('input', CoreHandler.Input);
