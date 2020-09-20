@@ -42,7 +42,7 @@
             <p x-if="state" x-uninit="$console.log('State was changed to false')">State is true</p>
             <p x-if="!state" x-uninit="$console.log('State was changed to true')">State is false</p>
         </div>
-        <div x-data="{email: 'user.google@gmail.com', name: 'Jane Hamlet'}">
+        <div x-data="{email: 'user.google@gmail.com', name: 'Jane Hamlet', self: this}" x-init="$console.log(self)">
             <div>
                 <span>Name: </span>
                 <span x-text="name"></span>
@@ -58,6 +58,10 @@
             <div>
                 <span>Email: </span>
                 <span x-text="email"></span>
+            </div>
+            <div x-data="{added: 'This was added'}">
+                <span>Added: </span>
+                <span x-text="added"></span>
             </div>
         </div>
     </div>

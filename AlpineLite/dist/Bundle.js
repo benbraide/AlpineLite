@@ -1433,6 +1433,24 @@ var AlpineLite;
             return HandlerReturn.Handled;
         }
         static Data(directive, element, state) {
+            let context = state.GetValueContext();
+            if (!context) {
+                return HandlerReturn.Handled;
+            }
+            let data = Evaluator.Evaluate(directive.value, state, element);
+            if (typeof data === 'function') {
+                data = data();
+            }
+            let targetType = typeof data;
+            if (!data || targetType === 'string' || targetType === 'function' || targetType !== 'object') {
+                return HandlerReturn.Handled;
+            }
+            if (data instanceof Node || data instanceof DOMTokenList) {
+                return HandlerReturn.Handled;
+            }
+            for (let key in data) { //Copy entries
+                context[key] = data[key];
+            }
             return HandlerReturn.Handled;
         }
         static Init(directive, element, state) {
@@ -1732,27 +1750,14 @@ var AlpineLite;
                         }
                         return null;
                     });
-                    let data = Evaluator.Evaluate(attributeValue, state);
-                    if (typeof data === 'function') {
-                        data = data();
-                    }
                     let name = `__ar${this.dataRegions_.length}__`;
                     let proxyData = Proxy.Create({
-                        target: data,
+                        target: {},
                         name: name,
                         parent: null,
                         element: null,
                         state: state
                     });
-                    if (!proxyData) {
-                        proxyData = Proxy.Create({
-                            target: {},
-                            name: name,
-                            parent: null,
-                            element: null,
-                            state: state
-                        });
-                    }
                     let handler = new Handler();
                     let processor = new Processor(state, handler);
                     let observer = new MutationObserver((mutations) => {

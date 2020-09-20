@@ -47,30 +47,15 @@ export namespace AlpineLite{
                         return null;
                     });
 
-                    let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(attributeValue, state);
-                    if (typeof data === 'function'){
-                        data = (data as () => void)();
-                    }
-                    
                     let name = `__ar${this.dataRegions_.length}__`;
                     let proxyData = ProxyScope.AlpineLite.Proxy.Create({
-                        target: data,
+                        target: {},
                         name: name,
                         parent: null,
                         element: null,
                         state: state
                     });
 
-                    if (!proxyData){
-                        proxyData = ProxyScope.AlpineLite.Proxy.Create({
-                            target: {},
-                            name: name,
-                            parent: null,
-                            element: null,
-                            state: state
-                        });
-                    }
-                    
                     let handler = new HandlerScope.AlpineLite.Handler();
                     let processor = new ProcessorScope.AlpineLite.Processor(state, handler);
 

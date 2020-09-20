@@ -22,6 +22,29 @@ export namespace AlpineLite{
         }
 
         public static Data(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            let context = state.GetValueContext();
+            if (!context){
+                return HandlerScope.AlpineLite.HandlerReturn.Handled;
+            }
+            
+            let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+            if (typeof data === 'function'){
+                data = (data as () => void)();
+            }
+
+            let targetType = typeof data;
+            if (!data || targetType === 'string' || targetType === 'function' || targetType !== 'object'){
+                return HandlerScope.AlpineLite.HandlerReturn.Handled;
+            }
+
+            if (data instanceof Node || data instanceof DOMTokenList){
+                return HandlerScope.AlpineLite.HandlerReturn.Handled;
+            }
+
+            for (let key in data){//Copy entries
+                context[key] = data[key];
+            }
+            
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
