@@ -1106,6 +1106,12 @@ namespace AlpineLite{
                 });
             });
 
+            addRootKey('root', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.details_.state.GetRootElement();
+                });
+            });
+
             addRootKey('parent', (proxy: Proxy): any => {
                 return new Value(() => {
                     let contextElement = proxy.GetContextElement();

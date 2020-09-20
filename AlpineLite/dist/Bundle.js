@@ -861,6 +861,11 @@ var AlpineLite;
                     return proxy.GetContextElement();
                 });
             });
+            addRootKey('root', (proxy) => {
+                return new Value(() => {
+                    return proxy.details_.state.GetRootElement();
+                });
+            });
             addRootKey('parent', (proxy) => {
                 return new Value(() => {
                     let contextElement = proxy.GetContextElement();

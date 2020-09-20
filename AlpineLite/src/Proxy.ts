@@ -735,6 +735,12 @@ export namespace AlpineLite{
                 });
             });
 
+            addRootKey('root', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy.details_.state.GetRootElement();
+                });
+            });
+
             addRootKey('parent', (proxy: Proxy): any => {
                 return new ValueScope.AlpineLite.Value(() => {
                     let contextElement = proxy.GetContextElement();
