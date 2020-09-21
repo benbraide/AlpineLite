@@ -11,11 +11,9 @@ export namespace AlpineLite{
     
     export class Processor{
         private state_: StateScope.AlpineLite.State = null;
-        private handler_: HandlerScope.AlpineLite.Handler = null;
 
-        constructor(state: StateScope.AlpineLite.State, handler: HandlerScope.AlpineLite.Handler){
+        constructor(state: StateScope.AlpineLite.State){
             this.state_ = state;
-            this.handler_ = handler;
         }
 
         public All(element: HTMLElement, options?: ProcessorOptions): void{
@@ -63,7 +61,7 @@ export namespace AlpineLite{
             let result: HandlerScope.AlpineLite.HandlerReturn;
             try{
                 this.state_.PushElementContext(element);
-                result = this.handler_.HandleDirective(directive, element, this.state_);
+                result = HandlerScope.AlpineLite.Handler.HandleDirective(directive, element, this.state_);
                 this.state_.PopElementContext();
             }
             catch (err){

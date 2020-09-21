@@ -360,31 +360,35 @@ export namespace AlpineLite{
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }
 
-        public static AddAll(handler: HandlerScope.AlpineLite.Handler){
-            handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
-            handler.AddDirectiveHandler('data', CoreHandler.Data);
+        public static AddAll(){
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('data', CoreHandler.Data);
 
-            handler.AddDirectiveHandler('init', CoreHandler.Init);
-            handler.AddDirectiveHandler('uninit', CoreHandler.Uninit);
-            handler.AddDirectiveHandler('bind', CoreHandler.Bind);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('init', CoreHandler.Init);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('uninit', CoreHandler.Uninit);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('bind', CoreHandler.Bind);
 
-            handler.AddDirectiveHandler('locals', CoreHandler.Locals);
-            handler.AddDirectiveHandler('id', CoreHandler.Id);
-            handler.AddDirectiveHandler('ref', CoreHandler.Ref);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('locals', CoreHandler.Locals);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('id', CoreHandler.Id);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('ref', CoreHandler.Ref);
 
-            handler.AddDirectiveHandler('class', CoreHandler.Class);
-            handler.AddDirectiveHandler('text', CoreHandler.Text);
-            handler.AddDirectiveHandler('html', CoreHandler.Html);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('class', CoreHandler.Class);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('text', CoreHandler.Text);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('html', CoreHandler.Html);
 
-            handler.AddDirectiveHandler('input', CoreHandler.Input);
-            handler.AddDirectiveHandler('model', CoreHandler.Model);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('input', CoreHandler.Input);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('model', CoreHandler.Model);
 
-            handler.AddDirectiveHandler('show', CoreHandler.Show);
-            handler.AddDirectiveHandler('if', CoreHandler.If);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('show', CoreHandler.Show);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('if', CoreHandler.If);
         }
 
         public static GetUninitKey(): string{
             return '__AlpineLiteUninit__';
         }
     }
+
+    (function(){
+        CoreHandler.AddAll();
+    })();
 }

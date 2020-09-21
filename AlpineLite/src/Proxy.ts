@@ -910,4 +910,8 @@ export namespace AlpineLite{
             });
         }
     }
+
+    (function(){
+        Proxy.AddCoreSpecialKeys();
+    })();
 }

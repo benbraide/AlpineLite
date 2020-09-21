@@ -188,14 +188,18 @@ export namespace AlpineLite{
             }
         }
 
-        public static AddAll(handler: HandlerScope.AlpineLite.Handler){
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
+        public static AddAll(){
+            HandlerScope.AlpineLite.Handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            HandlerScope.AlpineLite.Handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
+            HandlerScope.AlpineLite.Handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
 
         public static GetDisabledClassKey(): string{
             return '__AlpineLiteDisabled__';
         }
     }
+
+    (function(){
+        CoreBulkHandler.AddAll();
+    })();
 }

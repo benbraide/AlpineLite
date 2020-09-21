@@ -13,7 +13,6 @@ export namespace AlpineLite{
         data: ProxyScope.AlpineLite.Proxy;
         state: StateScope.AlpineLite.State;
         processor: ProcessorScope.AlpineLite.Processor;
-        handler: HandlerScope.AlpineLite.Handler;
         observer: MutationObserver;
     }
     
@@ -40,11 +39,6 @@ export namespace AlpineLite{
             }
         }
 
-        public InitializeHandlers(handler: HandlerScope.AlpineLite.Handler): void{
-            CoreHandlerScope.AlpineLite.CoreHandler.AddAll(handler);
-            CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.AddAll(handler);
-        }
-
         public Attach(anchors: Array<string> = ['data-x-data', 'x-data']): void{
             anchors.forEach((anchor: string) => {
                 document.querySelectorAll(`[${anchor}]`).forEach((element: Element): void => {
@@ -64,9 +58,7 @@ export namespace AlpineLite{
                         state: state
                     });
 
-                    let handler = new HandlerScope.AlpineLite.Handler();
-                    let processor = new ProcessorScope.AlpineLite.Processor(state, handler);
-
+                    let processor = new ProcessorScope.AlpineLite.Processor(state);
                     let observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
                             mutation.removedNodes.forEach((node: Node) => {
@@ -106,13 +98,8 @@ export namespace AlpineLite{
                         data: proxyData,
                         state: state,
                         processor: processor,
-                        handler: handler,
                         observer: observer
                     });
-
-                    ProxyScope.AlpineLite.Proxy.AddCoreSpecialKeys();
-                    CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.AddAll(handler);
-                    CoreHandlerScope.AlpineLite.CoreHandler.AddAll(handler);
 
                     processor.All((element as HTMLElement));
                     observer.observe(element, {

@@ -19,26 +19,26 @@ export namespace AlpineLite{
     export type DirectiveHandler = (directive: ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State) => HandlerReturn;
     
     export class Handler{
-        private directiveHandlers_ = new Map<string, DirectiveHandler>();
-        private bulkDirectiveHandlers_ = new Array<DirectiveHandler>();
+        private static directiveHandlers_ = new Map<string, DirectiveHandler>();
+        private static bulkDirectiveHandlers_ = new Array<DirectiveHandler>();
 
-        public AddDirectiveHandler(directive: string, handler: DirectiveHandler): void{
+        public static AddDirectiveHandler(directive: string, handler: DirectiveHandler): void{
             this.directiveHandlers_[directive] = handler;
         }
 
-        public GetDirectiveHandler(directive: string): DirectiveHandler{
+        public static GetDirectiveHandler(directive: string): DirectiveHandler{
             return ((directive in this.directiveHandlers_) ? this.directiveHandlers_[directive] : null);
         }
 
-        public AddBulkDirectiveHandler(handler: DirectiveHandler): void{
+        public static AddBulkDirectiveHandler(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.push(handler);
         }
 
-        public AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
+        public static AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.unshift(handler);
         }
 
-        public HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerReturn{
+        public static HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerReturn{
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
                 if (result == HandlerReturn.SkipBulk){
@@ -51,10 +51,22 @@ export namespace AlpineLite{
             }
 
             if (directive.key in this.directiveHandlers_){//Call handler
-                return this.directiveHandlers_[directive.key](directive, element, state);
+                let result = this.directiveHandlers_[directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
             }
             
+            let key = Handler.GetExternalHandlerKey();
+            if ((key in element) && directive.key in element[key]){
+                return (element[key][directive.key] as DirectiveHandler)(directive, element, state);
+            }
+
             return HandlerReturn.Nil;
+        }
+
+        public static GetExternalHandlerKey(): string{
+            return '__AlpineLiteHandler__';
         }
     }
 }

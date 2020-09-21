@@ -1282,6 +1282,10 @@ namespace AlpineLite{
         }
     }
 
+    (function(){
+        Proxy.AddCoreSpecialKeys();
+    })();
+
     //Evaluator begin
     export class Evaluator{
         private state_: State = null;
@@ -1387,14 +1391,14 @@ namespace AlpineLite{
     }
 
     //Handler interfaces
-    enum HandlerReturn{
+    export enum HandlerReturn{
         Nil,
         Handled,
         Rejected,
         SkipBulk,
     }
 
-    interface ProcessorDirective{
+    export interface ProcessorDirective{
         original: string;
         parts: Array<string>;
         raw: string;
@@ -1406,26 +1410,26 @@ namespace AlpineLite{
     
     //Handler begin
     export class Handler{
-        private directiveHandlers_ = new Map<string, DirectiveHandler>();
-        private bulkDirectiveHandlers_ = new Array<DirectiveHandler>();
+        private static directiveHandlers_ = new Map<string, DirectiveHandler>();
+        private static bulkDirectiveHandlers_ = new Array<DirectiveHandler>();
 
-        public AddDirectiveHandler(directive: string, handler: DirectiveHandler): void{
+        public static AddDirectiveHandler(directive: string, handler: DirectiveHandler): void{
             this.directiveHandlers_[directive] = handler;
         }
 
-        public GetDirectiveHandler(directive: string): DirectiveHandler{
+        public static GetDirectiveHandler(directive: string): DirectiveHandler{
             return ((directive in this.directiveHandlers_) ? this.directiveHandlers_[directive] : null);
         }
 
-        public AddBulkDirectiveHandler(handler: DirectiveHandler): void{
+        public static AddBulkDirectiveHandler(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.push(handler);
         }
 
-        public AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
+        public static AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void{
             this.bulkDirectiveHandlers_.unshift(handler);
         }
 
-        public HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+        public static HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
                 if (result == HandlerReturn.SkipBulk){
@@ -1438,10 +1442,22 @@ namespace AlpineLite{
             }
 
             if (directive.key in this.directiveHandlers_){//Call handler
-                return this.directiveHandlers_[directive.key](directive, element, state);
+                let result = this.directiveHandlers_[directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
+            }
+            
+            let key = Handler.GetExternalHandlerKey();
+            if ((key in element) && directive.key in element[key]){
+                return (element[key][directive.key] as DirectiveHandler)(directive, element, state);
             }
             
             return HandlerReturn.Nil;
+        }
+
+        public static GetExternalHandlerKey(): string{
+            return '__AlpineLiteHandler__';
         }
     }
 
@@ -1454,11 +1470,9 @@ namespace AlpineLite{
     //Processor begin
     export class Processor{
         private state_: State = null;
-        private handler_: Handler = null;
 
-        constructor(state: State, handler: Handler){
+        constructor(state: State){
             this.state_ = state;
-            this.handler_ = handler;
         }
 
         public All(element: HTMLElement, options?: ProcessorOptions): void{
@@ -1506,7 +1520,7 @@ namespace AlpineLite{
             let result: HandlerReturn;
             try{
                 this.state_.PushElementContext(element);
-                result = this.handler_.HandleDirective(directive, element, this.state_);
+                result = Handler.HandleDirective(directive, element, this.state_);
                 this.state_.PopElementContext();
             }
             catch (err){
@@ -1839,16 +1853,20 @@ namespace AlpineLite{
             }
         }
 
-        public static AddAll(handler: Handler){
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
-            handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
+        public static AddAll(){
+            Handler.AddBulkDirectiveHandler(CoreBulkHandler.Attr);
+            Handler.AddBulkDirectiveHandler(CoreBulkHandler.Style);
+            Handler.AddBulkDirectiveHandler(CoreBulkHandler.Event);
         }
 
         public static GetDisabledClassKey(): string{
             return '__AlpineLiteDisabled__';
         }
     }
+
+    (function(){
+        CoreBulkHandler.AddAll();
+    })();
 
     //CoreHandler interfaces
     interface TextHandlerOptions{
@@ -2206,27 +2224,27 @@ namespace AlpineLite{
             return HandlerReturn.Handled;
         }
 
-        public static AddAll(handler: Handler){
-            handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
-            handler.AddDirectiveHandler('data', CoreHandler.Data);
+        public static AddAll(){
+            Handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
+            Handler.AddDirectiveHandler('data', CoreHandler.Data);
 
-            handler.AddDirectiveHandler('init', CoreHandler.Init);
-            handler.AddDirectiveHandler('uninit', CoreHandler.Uninit);
-            handler.AddDirectiveHandler('bind', CoreHandler.Bind);
+            Handler.AddDirectiveHandler('init', CoreHandler.Init);
+            Handler.AddDirectiveHandler('uninit', CoreHandler.Uninit);
+            Handler.AddDirectiveHandler('bind', CoreHandler.Bind);
 
-            handler.AddDirectiveHandler('locals', CoreHandler.Locals);
-            handler.AddDirectiveHandler('id', CoreHandler.Id);
-            handler.AddDirectiveHandler('ref', CoreHandler.Ref);
+            Handler.AddDirectiveHandler('locals', CoreHandler.Locals);
+            Handler.AddDirectiveHandler('id', CoreHandler.Id);
+            Handler.AddDirectiveHandler('ref', CoreHandler.Ref);
 
-            handler.AddDirectiveHandler('class', CoreHandler.Class);
-            handler.AddDirectiveHandler('text', CoreHandler.Text);
-            handler.AddDirectiveHandler('html', CoreHandler.Html);
+            Handler.AddDirectiveHandler('class', CoreHandler.Class);
+            Handler.AddDirectiveHandler('text', CoreHandler.Text);
+            Handler.AddDirectiveHandler('html', CoreHandler.Html);
 
-            handler.AddDirectiveHandler('input', CoreHandler.Input);
-            handler.AddDirectiveHandler('model', CoreHandler.Model);
+            Handler.AddDirectiveHandler('input', CoreHandler.Input);
+            Handler.AddDirectiveHandler('model', CoreHandler.Model);
 
-            handler.AddDirectiveHandler('show', CoreHandler.Show);
-            handler.AddDirectiveHandler('if', CoreHandler.If);
+            Handler.AddDirectiveHandler('show', CoreHandler.Show);
+            Handler.AddDirectiveHandler('if', CoreHandler.If);
         }
 
         public static GetUninitKey(): string{
@@ -2234,13 +2252,16 @@ namespace AlpineLite{
         }
     }
 
+    (function(){
+        CoreHandler.AddAll();
+    })();
+
     //Bootstrap interfaces
     interface DataRegion{
         element: HTMLElement;
         data: Proxy;
         state: State;
         processor: Processor;
-        handler: Handler;
         observer: MutationObserver;
     }
     
@@ -2268,11 +2289,6 @@ namespace AlpineLite{
             }
         }
 
-        public InitializeHandlers(handler: Handler): void{
-            CoreHandler.AddAll(handler);
-            CoreBulkHandler.AddAll(handler);
-        }
-
         public Attach(anchors: Array<string> = ['data-x-data', 'x-data']): void{
             anchors.forEach((anchor: string) => {
                 document.querySelectorAll(`[${anchor}]`).forEach((element: Element): void => {
@@ -2292,9 +2308,7 @@ namespace AlpineLite{
                         state: state
                     });
                     
-                    let handler = new Handler();
-                    let processor = new Processor(state, handler);
-
+                    let processor = new Processor(state);
                     let observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
                             mutation.removedNodes.forEach((node: Node) => {
@@ -2334,13 +2348,8 @@ namespace AlpineLite{
                         data: proxyData,
                         state: state,
                         processor: processor,
-                        handler: handler,
                         observer: observer
                     });
-
-                    Proxy.AddCoreSpecialKeys();
-                    CoreBulkHandler.AddAll(handler);
-                    CoreHandler.AddAll(handler);
 
                     processor.All((element as HTMLElement));
                     observer.observe(element, {
