@@ -17,10 +17,12 @@ var AlpineLite;
                 options = options.call(state.GetValueContext());
             }
             let callbackInfo = {
-                active: new Array(),
-                stopped: new Array(),
+                handlers: new Array(),
                 activeValidCheck: false,
-                reportInitial: false
+                reportInitial: false,
+                isDirty: false,
+                isTyping: false,
+                isValid: element.checkValidity()
             };
             let stoppedDelay = 750;
             if (options && typeof options === 'object') {
@@ -50,17 +52,46 @@ var AlpineLite;
             map['invalid'] = (directive, element, state) => {
                 return ExtendedHandler.HandleInvalid(directive, element, state, callbackInfo);
             };
+            let specialKeyMap = (element[AlpineLite.Proxy.GetExternalSpecialKey()] = (element[AlpineLite.Proxy.GetExternalSpecialKey()] || {}));
+            specialKeyMap['$isDirty'] = (proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
+                    return new AlpineLite.ProxyNoResult();
+                }
+                return new AlpineLite.Value(() => {
+                    return callbackInfo.isDirty;
+                });
+            };
+            specialKeyMap['$isTyping'] = (proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
+                    return new AlpineLite.ProxyNoResult();
+                }
+                return new AlpineLite.Value(() => {
+                    return callbackInfo.isTyping;
+                });
+            };
+            specialKeyMap['$isValid'] = (proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
+                    return new AlpineLite.ProxyNoResult();
+                }
+                return new AlpineLite.Value(() => {
+                    return callbackInfo.isValid;
+                });
+            };
             let counter = 0;
             let eventCallback = (event) => {
                 let checkpoint = ++counter;
                 setTimeout(() => {
                     if (checkpoint == counter) {
-                        callbackInfo.stopped.forEach((callback) => {
+                        callbackInfo.isTyping = false;
+                        callbackInfo.handlers.forEach((callback) => {
                             callback();
                         });
                     }
                 }, stoppedDelay);
-                callbackInfo.active.forEach((callback) => {
+                callbackInfo.isDirty = true;
+                callbackInfo.isTyping = true;
+                callbackInfo.isValid = element.checkValidity();
+                callbackInfo.handlers.forEach((callback) => {
                     callback(event);
                 });
             };
@@ -120,10 +151,10 @@ var AlpineLite;
             return AlpineLite.HandlerReturn.Handled;
         }
         static HandleDirty(directive, element, state, callbackInfo) {
-            let isDirty = false;
-            callbackInfo.active.push((event) => {
-                if (!isDirty) {
-                    isDirty = true;
+            let wasDirty = false;
+            callbackInfo.handlers.push((event) => {
+                if (!wasDirty && callbackInfo.isDirty) {
+                    wasDirty = true;
                     let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                     if (typeof result === 'function') {
                         result.call(state.GetValueContext());
@@ -133,27 +164,25 @@ var AlpineLite;
             return AlpineLite.HandlerReturn.Handled;
         }
         static HandleTyping(directive, element, state, callbackInfo) {
-            let isTyping = false;
-            callbackInfo.active.push((event) => {
-                if (isTyping) {
-                    return;
+            let wasTyping = false;
+            callbackInfo.handlers.push((event) => {
+                if (!wasTyping && callbackInfo.isTyping) {
+                    wasTyping = true;
+                    let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+                    if (typeof result === 'function') {
+                        result.call(state.GetValueContext());
+                    }
                 }
-                isTyping = true;
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
-                }
-            });
-            callbackInfo.stopped.push(() => {
-                isTyping = false;
             });
             return AlpineLite.HandlerReturn.Handled;
         }
         static HandleStoppedTyping(directive, element, state, callbackInfo) {
-            callbackInfo.stopped.push(() => {
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
+            callbackInfo.handlers.push(() => {
+                if (!callbackInfo.isTyping) {
+                    let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+                    if (typeof result === 'function') {
+                        result.call(state.GetValueContext());
+                    }
                 }
             });
             return AlpineLite.HandlerReturn.Handled;
@@ -162,20 +191,19 @@ var AlpineLite;
             if (element.tagName !== 'INPUT') {
                 return AlpineLite.HandlerReturn.Nil;
             }
-            let wasValid = element.checkValidity();
+            let wasValid = callbackInfo.isValid;
             if (wasValid && callbackInfo.reportInitial) {
                 let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') {
                     result.call(state.GetValueContext());
                 }
             }
-            callbackInfo[callbackInfo.activeValidCheck ? 'active' : 'stopped'].push(() => {
-                let isValid = element.checkValidity();
-                if (!isValid) {
+            callbackInfo.handlers.push(() => {
+                if (!callbackInfo.isValid) {
                     wasValid = false;
                     return;
                 }
-                if (wasValid) {
+                if (wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck) {
                     return;
                 }
                 wasValid = true;
@@ -190,20 +218,19 @@ var AlpineLite;
             if (element.tagName !== 'INPUT') {
                 return AlpineLite.HandlerReturn.Nil;
             }
-            let wasValid = element.checkValidity();
+            let wasValid = callbackInfo.isValid;
             if (!wasValid && callbackInfo.reportInitial) {
                 let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') {
                     result.call(state.GetValueContext());
                 }
             }
-            callbackInfo[callbackInfo.activeValidCheck ? 'active' : 'stopped'].push(() => {
-                let isValid = element.checkValidity();
-                if (isValid) {
-                    wasValid = true;
+            callbackInfo.handlers.push(() => {
+                if (callbackInfo.isValid) {
+                    wasValid = false;
                     return;
                 }
-                if (!wasValid) {
+                if (!wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck) {
                     return;
                 }
                 wasValid = false;

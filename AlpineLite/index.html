@@ -41,8 +41,8 @@
             </div>
             <div>
                 <input type="text" x-model="name">
-                <input type="text" x-model="name" x-state x-typing="isTyping" x-stopped-typing="$console.log('User stopped typing')">
-                <input type="email" x-model="name" x-state="{reportInitial: true}" x-valid="$console.log('Valid input')" x-invalid="$console.log('Invalid input')">
+                <input type="text" x-model="name" x-state x-dirty="$console.log('Input is dirty', $isDirty)" x-typing="isTyping" x-stopped-typing="$console.log('User stopped typing', $isTyping)">
+                <input type="email" x-model="name" x-state="{reportInitial: true}" x-valid="$console.log('Valid input', $isValid)" x-invalid="$console.log('Invalid input')">
             </div>
             <p x-if="state" x-uninit="$console.log('State was changed to false')">State is true</p>
             <p x-if="!state" x-uninit="$console.log('State was changed to true')">State is false</p>

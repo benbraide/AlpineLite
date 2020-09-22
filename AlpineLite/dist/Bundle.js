@@ -649,6 +649,17 @@ var AlpineLite;
             Proxy.specialKeys_[key].push(handler);
         }
         static HandleSpecialKey(name, proxy) {
+            let externalKey = Proxy.GetExternalSpecialKey();
+            let contextElement = proxy.GetContextElement();
+            if (contextElement && typeof contextElement === 'object' && (externalKey in contextElement)) {
+                let externalCallbacks = contextElement[externalKey];
+                if (name in externalCallbacks) {
+                    let result = Proxy.ResolveValue(externalCallbacks[name](proxy));
+                    if (!(result instanceof ProxyNoResult)) {
+                        return result;
+                    }
+                }
+            }
             if (!(name in Proxy.specialKeys_)) {
                 return new ProxyNoResult();
             }
@@ -1005,6 +1016,9 @@ var AlpineLite;
                 };
             });
         }
+        static GetExternalSpecialKey() {
+            return '__AlpineLiteSpecial__';
+        }
     }
     Proxy.specialKeys_ = new Map();
     AlpineLite.Proxy = Proxy;
@@ -1063,8 +1077,11 @@ var AlpineLite;
             }
             let result = null;
             let valueContext = (state ? state.GetValueContext() : null);
-            if (!elementContext) {
-                elementContext = (state ? state.GetElementContext() : null);
+            if (state && elementContext) {
+                state.PushElementContext(elementContext);
+            }
+            else if (state) {
+                elementContext = state.GetElementContext();
             }
             try {
                 if (valueContext) {
@@ -1083,6 +1100,11 @@ var AlpineLite;
             catch (err) {
                 result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
+            }
+            finally {
+                if (state && elementContext) {
+                    state.PopElementContext();
+                }
             }
             return result;
         }

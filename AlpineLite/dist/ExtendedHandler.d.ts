@@ -1,9 +1,11 @@
 declare namespace AlpineLite {
     interface StateCallbackInfo {
-        active: Array<(event: Event) => void>;
-        stopped: Array<() => void>;
+        handlers: Array<(event?: Event) => void>;
         activeValidCheck: boolean;
         reportInitial: boolean;
+        isDirty: boolean;
+        isTyping: boolean;
+        isValid: boolean;
     }
     interface ObserveCallbackInfo {
         increment: Array<(ratio: number, prevRatio: number) => void>;

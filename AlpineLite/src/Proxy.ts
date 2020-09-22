@@ -468,6 +468,19 @@ export namespace AlpineLite{
         }
 
         public static HandleSpecialKey(name: string, proxy: Proxy): any{
+            let externalKey = Proxy.GetExternalSpecialKey();
+            let contextElement = proxy.GetContextElement();
+
+            if (contextElement && typeof contextElement === 'object' && (externalKey in contextElement)){
+                let externalCallbacks = contextElement[externalKey];
+                if (name in externalCallbacks){
+                    let result = Proxy.ResolveValue((externalCallbacks[name] as (proxy: Proxy) => any)(proxy));
+                    if (!(result instanceof ProxyNoResult)){
+                        return result;
+                    }
+                }
+            }
+            
             if (!(name in Proxy.specialKeys_)){
                 return new ProxyNoResult();
             }
@@ -908,6 +921,10 @@ export namespace AlpineLite{
                     });
                 };
             });
+        }
+
+        public static GetExternalSpecialKey(): string{
+            return '__AlpineLiteSpecial__';
         }
     }
 

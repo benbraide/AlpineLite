@@ -839,6 +839,19 @@ namespace AlpineLite{
         }
 
         public static HandleSpecialKey(name: string, proxy: Proxy): any{
+            let externalKey = Proxy.GetExternalSpecialKey();
+            let contextElement = proxy.GetContextElement();
+
+            if (contextElement && typeof contextElement === 'object' && (externalKey in contextElement)){
+                let externalCallbacks = contextElement[externalKey];
+                if (name in externalCallbacks){
+                    let result = Proxy.ResolveValue((externalCallbacks[name] as (proxy: Proxy) => any)(proxy));
+                    if (!(result instanceof ProxyNoResult)){
+                        return result;
+                    }
+                }
+            }
+            
             if (!(name in Proxy.specialKeys_)){
                 return new ProxyNoResult();
             }
@@ -1280,6 +1293,10 @@ namespace AlpineLite{
                 };
             });
         }
+
+        public static GetExternalSpecialKey(): string{
+            return '__AlpineLiteSpecial__';
+        }
     }
 
     (function(){
@@ -1353,8 +1370,11 @@ namespace AlpineLite{
             let result: any = null;
             let valueContext = (state ? state.GetValueContext() : null);
 
-            if (!elementContext){
-                elementContext = (state ? state.GetElementContext() : null);
+            if (state && elementContext){
+                state.PushElementContext(elementContext);
+            }
+            else if (state){
+                elementContext = state.GetElementContext();
             }
             
             try{
@@ -1374,6 +1394,11 @@ namespace AlpineLite{
             catch (err){
                 result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
+            }
+            finally{
+                if (state && elementContext){
+                    state.PopElementContext();
+                }
             }
 
             return result;

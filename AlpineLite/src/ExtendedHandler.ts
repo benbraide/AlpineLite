@@ -1,9 +1,11 @@
 namespace AlpineLite{
     interface StateCallbackInfo{
-        active: Array<(event: Event) => void>;
-        stopped: Array<() => void>;
+        handlers: Array<(event?: Event) => void>;
         activeValidCheck: boolean;
         reportInitial: boolean;
+        isDirty: boolean;
+        isTyping: boolean;
+        isValid: boolean;
     };
 
     interface ObserveCallbackInfo{
@@ -30,10 +32,12 @@ namespace AlpineLite{
             }
 
             let callbackInfo: StateCallbackInfo = {
-                active: new Array<(event: Event) => void>(),
-                stopped: new Array<() => void>(),
+                handlers: new Array<(event?: Event) => void>(),
                 activeValidCheck: false,
-                reportInitial: false
+                reportInitial: false,
+                isDirty: false,
+                isTyping: false,
+                isValid: (element as HTMLInputElement).checkValidity()
             };
 
             let stoppedDelay = 750;
@@ -71,19 +75,55 @@ namespace AlpineLite{
             map['invalid'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
                 return ExtendedHandler.HandleInvalid(directive, element, state, callbackInfo);
             };
+
+            let specialKeyMap = (element[Proxy.GetExternalSpecialKey()] = (element[Proxy.GetExternalSpecialKey()] || {}));
+            specialKeyMap['$isDirty'] = (proxy: Proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element){//Root required
+                    return new ProxyNoResult();
+                }
+                
+                return new Value(() => {
+                    return callbackInfo.isDirty;
+                });
+            };
+
+            specialKeyMap['$isTyping'] = (proxy: Proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element){//Root required
+                    return new ProxyNoResult();
+                }
+                
+                return new Value(() => {
+                    return callbackInfo.isTyping;
+                });
+            };
+
+            specialKeyMap['$isValid'] = (proxy: Proxy) => {
+                if (!proxy.IsRoot() || proxy.GetDetails().element){//Root required
+                    return new ProxyNoResult();
+                }
+                
+                return new Value(() => {
+                    return callbackInfo.isValid;
+                });
+            };
             
             let counter = 0;
             let eventCallback = (event: Event) => {
                 let checkpoint = ++counter;
                 setTimeout(() => {
                     if (checkpoint == counter){
-                        callbackInfo.stopped.forEach((callback: () => void): void => {
+                        callbackInfo.isTyping = false;
+                        callbackInfo.handlers.forEach((callback: () => void): void => {
                             callback();
                         });
                     }
                 }, stoppedDelay);
+
+                callbackInfo.isDirty = true;
+                callbackInfo.isTyping = true;
+                callbackInfo.isValid = (element as HTMLInputElement).checkValidity();
                 
-                callbackInfo.active.forEach((callback: (event: Event) => void): void => {
+                callbackInfo.handlers.forEach((callback: (event: Event) => void): void => {
                     callback(event);
                 });
             };
@@ -156,10 +196,11 @@ namespace AlpineLite{
         }
 
         public static HandleDirty(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            let isDirty = false;
-            callbackInfo.active.push((event: Event): void => {
-                if (!isDirty){
-                    isDirty = true;
+            let wasDirty = false;
+            callbackInfo.handlers.push((event: Event): void => {
+                if (!wasDirty && callbackInfo.isDirty){
+                    wasDirty = true;
+                    
                     let result = Evaluator.Evaluate(directive.value, state, element);
                     if (typeof result === 'function'){
                         (result as () => {}).call(state.GetValueContext());
@@ -171,31 +212,28 @@ namespace AlpineLite{
         }
 
         public static HandleTyping(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            let isTyping = false;
-            callbackInfo.active.push((event: Event): void => {
-                if (isTyping){
-                    return;
-                }
+            let wasTyping = false;
+            callbackInfo.handlers.push((event: Event): void => {
+                if (!wasTyping && callbackInfo.isTyping){
+                    wasTyping = true;
 
-                isTyping = true;
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
+                    let result = Evaluator.Evaluate(directive.value, state, element);
+                    if (typeof result === 'function'){
+                        (result as () => {}).call(state.GetValueContext());
+                    }
                 }
             });
 
-            callbackInfo.stopped.push((): void => {
-                isTyping = false;
-            });
-            
             return HandlerReturn.Handled;
         }
 
         public static HandleStoppedTyping(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            callbackInfo.stopped.push((): void => {
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
+            callbackInfo.handlers.push((): void => {
+                if (!callbackInfo.isTyping){
+                    let result = Evaluator.Evaluate(directive.value, state, element);
+                    if (typeof result === 'function'){
+                        (result as () => {}).call(state.GetValueContext());
+                    }
                 }
             });
 
@@ -207,7 +245,7 @@ namespace AlpineLite{
                 return HandlerReturn.Nil;
             }
             
-            let wasValid = (element as HTMLInputElement).checkValidity();
+            let wasValid = callbackInfo.isValid;
             if (wasValid && callbackInfo.reportInitial){
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){
@@ -215,18 +253,18 @@ namespace AlpineLite{
                 }
             }
             
-            callbackInfo[callbackInfo.activeValidCheck ? 'active' : 'stopped'].push((): void => {
-                let isValid = (element as HTMLInputElement).checkValidity();
-                if (!isValid){
+            callbackInfo.handlers.push((): void => {
+                if (!callbackInfo.isValid){
                     wasValid = false;
                     return;
                 }
 
-                if (wasValid){
+                if (wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck){
                     return;
                 }
                 
                 wasValid = true;
+
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){
                     (result as () => {}).call(state.GetValueContext());
@@ -241,32 +279,32 @@ namespace AlpineLite{
                 return HandlerReturn.Nil;
             }
             
-            let wasValid = (element as HTMLInputElement).checkValidity();
+            let wasValid = callbackInfo.isValid;
             if (!wasValid && callbackInfo.reportInitial){
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){
                     (result as () => {}).call(state.GetValueContext());
                 }
             }
-            
-            callbackInfo[callbackInfo.activeValidCheck ? 'active' : 'stopped'].push((): void => {
-                let isValid = (element as HTMLInputElement).checkValidity();
-                if (isValid){
-                    wasValid = true;
+
+            callbackInfo.handlers.push((): void => {
+                if (callbackInfo.isValid){
+                    wasValid = false;
                     return;
                 }
 
-                if (!wasValid){
+                if (!wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck){
                     return;
                 }
                 
                 wasValid = false;
+                
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){
                     (result as () => {}).call(state.GetValueContext());
                 }
             });
-
+            
             return HandlerReturn.Handled;
         }
 

@@ -67,8 +67,11 @@ export namespace AlpineLite{
             let result: any = null;
             let valueContext = (state ? state.GetValueContext() : null);
 
-            if (!elementContext){
-                elementContext = (state ? state.GetElementContext() : null);
+            if (state && elementContext){
+                state.PushElementContext(elementContext);
+            }
+            else if (state){
+                elementContext = state.GetElementContext();
             }
             
             try{
@@ -88,6 +91,11 @@ export namespace AlpineLite{
             catch (err){
                 result = null;
                 state.ReportError(err, `AlpineLite.Evaluator.Value(${expression})`);
+            }
+            finally{
+                if (state && elementContext){
+                    state.PopElementContext();
+                }
             }
 
             return result;
