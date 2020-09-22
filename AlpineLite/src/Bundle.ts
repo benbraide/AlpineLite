@@ -1841,6 +1841,14 @@ namespace AlpineLite{
                 return HandlerReturn.Nil;   
             }
 
+            let eventExpansionKey = CoreBulkHandler.GetEventExpansionKey();
+            if (eventExpansionKey in element){
+                let handlers = (element[eventExpansionKey] as Map<string, (value: string) => string>);
+                if (eventName in handlers){
+                    eventName = handlers[eventName](eventName);
+                }
+            }
+
             if (!markers.outside){
                 element.addEventListener(eventName, (event: Event): void => {
                     if (markers.prevented){
@@ -1855,7 +1863,7 @@ namespace AlpineLite{
                     try{
                         let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
-                            (result as (event: Event) => void)(event);
+                            (result as (event: Event) => void).call(state.GetValueContext(), event);
                         }
                     }
                     catch (err){
@@ -1870,7 +1878,7 @@ namespace AlpineLite{
                     handler: (event: Event) => {
                         let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
-                            (result as (event: Event) => void)(event);
+                            (result as (event: Event) => void).call(state.GetValueContext(), event);
                         }
                     },
                     element: element
@@ -1886,6 +1894,10 @@ namespace AlpineLite{
 
         public static GetDisabledClassKey(): string{
             return '__AlpineLiteDisabled__';
+        }
+
+        public static GetEventExpansionKey(): string{
+            return '__AlpineLiteEventExpansion__';
         }
     }
 
@@ -1918,7 +1930,7 @@ namespace AlpineLite{
             
             let data = Evaluator.Evaluate(directive.value, state, element);
             if (typeof data === 'function'){
-                data = (data as () => void)();
+                data = (data as () => void).call(state.GetValueContext());
             }
 
             let targetType = typeof data;
@@ -1940,7 +1952,7 @@ namespace AlpineLite{
         public static Init(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
-                (result as () => any)();
+                (result as () => any).call(state.GetValueContext());
             }
             
             return HandlerReturn.Handled;
@@ -1950,7 +1962,7 @@ namespace AlpineLite{
             element[CoreHandler.GetUninitKey()] = () => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
-                    (result as () => any)();
+                    (result as () => any).call(state.GetValueContext());
                 }
             };
 
@@ -1961,7 +1973,7 @@ namespace AlpineLite{
             state.TrapGetAccess((change: IChange | IBubbledChange): void => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
-                    (result as () => any)();
+                    (result as () => any).call(state.GetValueContext());
                 }
             }, true);
 
@@ -1971,7 +1983,7 @@ namespace AlpineLite{
         public static Locals(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
-                result = (result as () => any)();
+                result = (result as () => any).call(state.GetValueContext());
             }
 
             let proxy = Proxy.Create({
@@ -2056,7 +2068,7 @@ namespace AlpineLite{
             let callback: (change: IChange | IBubbledChange) => void;
             let getValue = (): any => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
             
             if (options.isHtml){
@@ -2184,7 +2196,7 @@ namespace AlpineLite{
         public static Show(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             let getValue = (): any => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
             
             let previousDisplay = element.style.display;
@@ -2210,7 +2222,7 @@ namespace AlpineLite{
             
             let getValue = (): any => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
 
             let attributes = new Map<string, string>();

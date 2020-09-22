@@ -1,7 +1,15 @@
 "use strict";
 var AlpineLite;
 (function (AlpineLite) {
-    ;
+    const InputDirtyEvent = new Event('alpine.input.dirty');
+    const InputTypingEvent = new Event('alpine.input.typing');
+    const InputStoppedTypingEvent = new Event('alpine.input.stopped.typing');
+    const InputValidEvent = new Event('alpine.input.valid');
+    const InputInvalidEvent = new Event('alpine.input.invalid');
+    const ObservedIncrementEvent = new Event('alpine.observed.increment');
+    const ObservedDecrementEvent = new Event('alpine.observed.decrement');
+    const ObservedVisible = new Event('alpine.observed.visible');
+    const ObservedHidden = new Event('alpine.observed.hidden');
     ;
     class ExtendedHandler {
         static State(directive, element, state) {
@@ -17,9 +25,7 @@ var AlpineLite;
                 options = options.call(state.GetValueContext());
             }
             let callbackInfo = {
-                handlers: new Array(),
                 activeValidCheck: false,
-                reportInitial: false,
                 isDirty: false,
                 isTyping: false,
                 isValid: element.checkValidity()
@@ -32,25 +38,37 @@ var AlpineLite;
                 if (('activeValidCheck' in options) && options['activeValidCheck']) {
                     callbackInfo.activeValidCheck = true;
                 }
-                if (('reportInitial' in options) && options['reportInitial']) {
-                    callbackInfo.reportInitial = true;
-                }
             }
-            let map = (element[AlpineLite.Handler.GetExternalHandlerKey()] = (element[AlpineLite.Handler.GetExternalHandlerKey()] || {}));
-            map['dirty'] = (directive, element, state) => {
-                return ExtendedHandler.HandleDirty(directive, element, state, callbackInfo);
+            let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['dirty'] = () => {
+                return 'alpine.input.dirty';
             };
-            map['typing'] = (directive, element, state) => {
-                return ExtendedHandler.HandleTyping(directive, element, state, callbackInfo);
+            map['input.dirty'] = () => {
+                return 'alpine.input.dirty';
             };
-            map['stoppedTyping'] = (directive, element, state) => {
-                return ExtendedHandler.HandleStoppedTyping(directive, element, state, callbackInfo);
+            map['typing'] = () => {
+                return 'alpine.input.typing';
             };
-            map['valid'] = (directive, element, state) => {
-                return ExtendedHandler.HandleValid(directive, element, state, callbackInfo);
+            map['input.typing'] = () => {
+                return 'alpine.input.typing';
             };
-            map['invalid'] = (directive, element, state) => {
-                return ExtendedHandler.HandleInvalid(directive, element, state, callbackInfo);
+            map['stopped.typing'] = () => {
+                return 'alpine.input.stopped.typing';
+            };
+            map['input.stopped.typing'] = () => {
+                return 'alpine.input.stopped.typing';
+            };
+            map['valid'] = () => {
+                return 'alpine.input.valid';
+            };
+            map['input.valid'] = () => {
+                return 'alpine.input.valid';
+            };
+            map['invalid'] = () => {
+                return 'alpine.input.invalid';
+            };
+            map['input.invalid'] = () => {
+                return 'alpine.input.invalid';
             };
             let specialKeyMap = (element[AlpineLite.Proxy.GetExternalSpecialKey()] = (element[AlpineLite.Proxy.GetExternalSpecialKey()] || {}));
             specialKeyMap['$isDirty'] = (proxy) => {
@@ -81,19 +99,36 @@ var AlpineLite;
             let eventCallback = (event) => {
                 let checkpoint = ++counter;
                 setTimeout(() => {
-                    if (checkpoint == counter) {
+                    if (checkpoint != counter) {
+                        return;
+                    }
+                    if (callbackInfo.isTyping) {
                         callbackInfo.isTyping = false;
-                        callbackInfo.handlers.forEach((callback) => {
-                            callback();
-                        });
+                        element.dispatchEvent(InputStoppedTypingEvent);
+                    }
+                    let isValid = element.checkValidity();
+                    if (isValid != callbackInfo.isValid) {
+                        callbackInfo.isValid = isValid;
+                        if (!callbackInfo.activeValidCheck) {
+                            element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                        }
                     }
                 }, stoppedDelay);
-                callbackInfo.isDirty = true;
-                callbackInfo.isTyping = true;
-                callbackInfo.isValid = element.checkValidity();
-                callbackInfo.handlers.forEach((callback) => {
-                    callback(event);
-                });
+                if (!callbackInfo.isTyping) {
+                    callbackInfo.isTyping = true;
+                    element.dispatchEvent(InputTypingEvent);
+                }
+                if (!callbackInfo.isDirty) {
+                    callbackInfo.isDirty = true;
+                    element.dispatchEvent(InputDirtyEvent);
+                }
+                if (callbackInfo.activeValidCheck) {
+                    let isValid = element.checkValidity();
+                    if (isValid != callbackInfo.isValid) {
+                        callbackInfo.isValid = isValid;
+                        element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                    }
+                }
             };
             element.addEventListener('keydown', eventCallback);
             element.addEventListener('input', eventCallback);
@@ -106,10 +141,6 @@ var AlpineLite;
             if (typeof options === 'function') {
                 options = options.call(state.GetValueContext());
             }
-            let callbackInfo = {
-                increment: new Array(),
-                decrement: new Array()
-            };
             let observerOptions = {
                 root: null,
                 rootMargin: '0px',
@@ -129,146 +160,55 @@ var AlpineLite;
                     observerOptions.threshold = options['threshold'];
                 }
             }
-            ExtendedHandler.ObserveWith(element, (ratio, prevRatio, isIncrement) => {
-                if (isIncrement) { //Increment
-                    callbackInfo.increment.forEach((callback) => {
-                        callback(ratio, prevRatio);
-                    });
-                }
-                else { //Decrement
-                    callbackInfo.decrement.forEach((callback) => {
-                        callback(ratio, prevRatio);
-                    });
-                }
-            }, observerOptions);
-            let map = (element[AlpineLite.Handler.GetExternalHandlerKey()] = (element[AlpineLite.Handler.GetExternalHandlerKey()] || {}));
-            map['increment'] = (directive, element, state) => {
-                return ExtendedHandler.HandleIncrement(directive, element, state, callbackInfo);
+            let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['increment'] = () => {
+                return 'alpine.observed.increment';
             };
-            map['decrement'] = (directive, element, state) => {
-                return ExtendedHandler.HandleDecrement(directive, element, state, callbackInfo);
+            map['observed.increment'] = () => {
+                return 'alpine.observed.increment';
             };
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleDirty(directive, element, state, callbackInfo) {
-            let wasDirty = false;
-            callbackInfo.handlers.push((event) => {
-                if (!wasDirty && callbackInfo.isDirty) {
-                    wasDirty = true;
-                    let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function') {
-                        result.call(state.GetValueContext());
-                    }
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleTyping(directive, element, state, callbackInfo) {
-            let wasTyping = false;
-            callbackInfo.handlers.push((event) => {
-                if (!wasTyping && callbackInfo.isTyping) {
-                    wasTyping = true;
-                    let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function') {
-                        result.call(state.GetValueContext());
-                    }
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleStoppedTyping(directive, element, state, callbackInfo) {
-            callbackInfo.handlers.push(() => {
-                if (!callbackInfo.isTyping) {
-                    let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function') {
-                        result.call(state.GetValueContext());
-                    }
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleValid(directive, element, state, callbackInfo) {
-            if (element.tagName !== 'INPUT') {
-                return AlpineLite.HandlerReturn.Nil;
-            }
-            let wasValid = callbackInfo.isValid;
-            if (wasValid && callbackInfo.reportInitial) {
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
-                }
-            }
-            callbackInfo.handlers.push(() => {
-                if (!callbackInfo.isValid) {
-                    wasValid = false;
-                    return;
-                }
-                if (wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck) {
-                    return;
-                }
-                wasValid = true;
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleInvalid(directive, element, state, callbackInfo) {
-            if (element.tagName !== 'INPUT') {
-                return AlpineLite.HandlerReturn.Nil;
-            }
-            let wasValid = callbackInfo.isValid;
-            if (!wasValid && callbackInfo.reportInitial) {
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
-                }
-            }
-            callbackInfo.handlers.push(() => {
-                if (callbackInfo.isValid) {
-                    wasValid = false;
-                    return;
-                }
-                if (!wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck) {
-                    return;
-                }
-                wasValid = false;
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext());
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleIncrement(directive, element, state, callbackInfo) {
-            callbackInfo.increment.push((ratio, prevRatio) => {
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext(), ratio, prevRatio);
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static HandleDecrement(directive, element, state, callbackInfo) {
-            callbackInfo.decrement.push((ratio, prevRatio) => {
-                let result = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function') {
-                    result.call(state.GetValueContext(), ratio, prevRatio);
-                }
-            });
-            return AlpineLite.HandlerReturn.Handled;
-        }
-        static ObserveWith(element, callback, options) {
-            let previousRatio = 0.0;
+            map['decrement'] = () => {
+                return 'alpine.observed.decrement';
+            };
+            map['observed.decrement'] = () => {
+                return 'alpine.observed.decrement';
+            };
+            map['visible'] = () => {
+                return 'alpine.observed.visible';
+            };
+            map['observed.visible'] = () => {
+                return 'alpine.observed.visible';
+            };
+            map['hidden'] = () => {
+                return 'alpine.observed.hidden';
+            };
+            map['observed.hidden'] = () => {
+                return 'alpine.observed.hidden';
+            };
+            let previousRatio = 0;
             let observer = new IntersectionObserver((entries) => {
                 entries.forEach((entry) => {
-                    callback(entry.intersectionRatio, previousRatio, (entry.isIntersecting && previousRatio < entry.intersectionRatio));
-                    previousRatio = entry.intersectionRatio;
+                    if (!entry.isIntersecting) { //Hidden
+                        element.dispatchEvent(ObservedDecrementEvent);
+                        element.dispatchEvent(ObservedHidden);
+                        previousRatio = 0;
+                    }
+                    else if (previousRatio < entry.intersectionRatio) { //Increment
+                        if (previousRatio == 0) { //Visible
+                            element.dispatchEvent(ObservedVisible);
+                        }
+                        element.dispatchEvent(ObservedIncrementEvent);
+                        previousRatio = entry.intersectionRatio;
+                    }
+                    else { //Decrement
+                        element.dispatchEvent(ObservedDecrementEvent);
+                        previousRatio = entry.intersectionRatio;
+                    }
                 });
-            }, options);
+            }, observerOptions);
             ExtendedHandler.observers_.push(observer);
             observer.observe(element);
+            return AlpineLite.HandlerReturn.Handled;
         }
         static AddAll() {
             AlpineLite.Handler.AddDirectiveHandler('state', ExtendedHandler.State);

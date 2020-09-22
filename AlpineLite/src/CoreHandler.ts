@@ -29,7 +29,7 @@ export namespace AlpineLite{
             
             let data = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof data === 'function'){
-                data = (data as () => void)();
+                data = (data as () => void).call(state.GetValueContext());
             }
 
             let targetType = typeof data;
@@ -51,7 +51,7 @@ export namespace AlpineLite{
         public static Init(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
-                (result as () => any)();
+                (result as () => any).call(state.GetValueContext());
             }
             
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
@@ -61,7 +61,7 @@ export namespace AlpineLite{
             element[CoreHandler.GetUninitKey()] = () => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
-                    (result as () => any)();
+                    (result as () => any).call(state.GetValueContext());
                 }
             };
 
@@ -72,7 +72,7 @@ export namespace AlpineLite{
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
-                    (result as () => any)();
+                    (result as () => any).call(state.GetValueContext());
                 }
             }, true);
 
@@ -82,7 +82,7 @@ export namespace AlpineLite{
         public static Locals(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function'){//Call function
-                result = (result as () => any)();
+                result = (result as () => any).call(state.GetValueContext());
             }
 
             let proxy = ProxyScope.AlpineLite.Proxy.Create({
@@ -167,7 +167,7 @@ export namespace AlpineLite{
             let callback: (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange) => void;
             let getValue = (): any => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
             
             if (options.isHtml){
@@ -295,7 +295,7 @@ export namespace AlpineLite{
         public static Show(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             let getValue = (): any => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
             
             let previousDisplay = element.style.display;
@@ -321,7 +321,7 @@ export namespace AlpineLite{
             
             let getValue = (): any => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? (result as () => any)() : result);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
             };
 
             let attributes = new Map<string, string>();

@@ -219,6 +219,7 @@ declare namespace AlpineLite {
         static Event(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static AddAll(): void;
         static GetDisabledClassKey(): string;
+        static GetEventExpansionKey(): string;
     }
     export class CoreHandler {
         static Cloak(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;

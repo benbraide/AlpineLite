@@ -1457,6 +1457,13 @@ var AlpineLite;
             if (!markers.on && knownEvents.indexOf(eventName) == -1) { //Malformed
                 return HandlerReturn.Nil;
             }
+            let eventExpansionKey = CoreBulkHandler.GetEventExpansionKey();
+            if (eventExpansionKey in element) {
+                let handlers = element[eventExpansionKey];
+                if (eventName in handlers) {
+                    eventName = handlers[eventName](eventName);
+                }
+            }
             if (!markers.outside) {
                 element.addEventListener(eventName, (event) => {
                     if (markers.prevented) {
@@ -1469,7 +1476,7 @@ var AlpineLite;
                     try {
                         let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function') { //Call function
-                            result(event);
+                            result.call(state.GetValueContext(), event);
                         }
                     }
                     catch (err) {
@@ -1483,7 +1490,7 @@ var AlpineLite;
                     handler: (event) => {
                         let result = Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function') { //Call function
-                            result(event);
+                            result.call(state.GetValueContext(), event);
                         }
                     },
                     element: element
@@ -1497,6 +1504,9 @@ var AlpineLite;
         }
         static GetDisabledClassKey() {
             return '__AlpineLiteDisabled__';
+        }
+        static GetEventExpansionKey() {
+            return '__AlpineLiteEventExpansion__';
         }
     }
     CoreBulkHandler.outsideEventsHandlers_ = new Map();
@@ -1516,7 +1526,7 @@ var AlpineLite;
             }
             let data = Evaluator.Evaluate(directive.value, state, element);
             if (typeof data === 'function') {
-                data = data();
+                data = data.call(state.GetValueContext());
             }
             let targetType = typeof data;
             if (!data || targetType === 'string' || targetType === 'function' || targetType !== 'object') {
@@ -1533,7 +1543,7 @@ var AlpineLite;
         static Init(directive, element, state) {
             let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function') { //Call function
-                result();
+                result.call(state.GetValueContext());
             }
             return HandlerReturn.Handled;
         }
@@ -1541,7 +1551,7 @@ var AlpineLite;
             element[CoreHandler.GetUninitKey()] = () => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') { //Call function
-                    result();
+                    result.call(state.GetValueContext());
                 }
             };
             return HandlerReturn.Handled;
@@ -1550,7 +1560,7 @@ var AlpineLite;
             state.TrapGetAccess((change) => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') { //Call function
-                    result();
+                    result.call(state.GetValueContext());
                 }
             }, true);
             return HandlerReturn.Handled;
@@ -1558,7 +1568,7 @@ var AlpineLite;
         static Locals(directive, element, state) {
             let result = Evaluator.Evaluate(directive.value, state, element);
             if (typeof result === 'function') { //Call function
-                result = result();
+                result = result.call(state.GetValueContext());
             }
             let proxy = Proxy.Create({
                 target: result,
@@ -1629,7 +1639,7 @@ var AlpineLite;
             let callback;
             let getValue = () => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? result() : result);
+                return ((typeof result === 'function') ? result.call(state.GetValueContext()) : result);
             };
             if (options.isHtml) {
                 callback = (change) => {
@@ -1742,7 +1752,7 @@ var AlpineLite;
         static Show(directive, element, state) {
             let getValue = () => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? result() : result);
+                return ((typeof result === 'function') ? result.call(state.GetValueContext()) : result);
             };
             let previousDisplay = element.style.display;
             if (previousDisplay === 'none') {
@@ -1763,7 +1773,7 @@ var AlpineLite;
             let marker = document.createElement('x-placeholder');
             let getValue = () => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
-                return ((typeof result === 'function') ? result() : result);
+                return ((typeof result === 'function') ? result.call(state.GetValueContext()) : result);
             };
             let attributes = new Map();
             for (let i = 0; i < element.attributes.length; ++i) { //Copy attributes

@@ -151,6 +151,14 @@ export namespace AlpineLite{
                 return HandlerScope.AlpineLite.HandlerReturn.Nil;   
             }
 
+            let eventExpansionKey = CoreBulkHandler.GetEventExpansionKey();
+            if (eventExpansionKey in element){
+                let handlers = (element[eventExpansionKey] as Map<string, (value: string) => string>);
+                if (eventName in handlers){
+                    eventName = handlers[eventName](eventName);
+                }
+            }
+
             if (!markers.outside){
                 element.addEventListener(eventName, (event: Event): void => {
                     if (markers.prevented){
@@ -165,7 +173,7 @@ export namespace AlpineLite{
                     try{
                         let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
-                            (result as (event: Event) => void)(event);
+                            (result as (event: Event) => void).call(state.GetValueContext(), event);
                         }
                     }
                     catch (err){
@@ -180,7 +188,7 @@ export namespace AlpineLite{
                     handler: (event: Event) => {
                         let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                         if (typeof result === 'function'){//Call function
-                            (result as (event: Event) => void)(event);
+                            (result as (event: Event) => void).call(state.GetValueContext(), event);
                         }
                     },
                     element: element
@@ -196,6 +204,10 @@ export namespace AlpineLite{
 
         public static GetDisabledClassKey(): string{
             return '__AlpineLiteDisabled__';
+        }
+
+        public static GetEventExpansionKey(): string{
+            return '__AlpineLiteEventExpansion__';
         }
     }
 

@@ -41,8 +41,8 @@
             </div>
             <div>
                 <input type="text" x-model="name">
-                <input type="text" x-model="name" x-state x-dirty="$console.log('Input is dirty', $isDirty)" x-typing="isTyping" x-stopped-typing="$console.log('User stopped typing', $isTyping)">
-                <input type="email" x-model="name" x-state="{reportInitial: true}" x-valid="$console.log('Valid input', $isValid)" x-invalid="$console.log('Invalid input')">
+                <input type="text" x-model="name" x-state x-on-dirty="$console.log('Input is dirty', $isDirty)" x-on-typing="isTyping" x-on-stopped.typing="$console.log('User stopped typing', $isTyping)">
+                <input type="email" x-model="name" x-state="{reportInitial: true}" x-on-valid="$console.log('Valid input', $isValid)" x-on-invalid="$console.log('Invalid input')">
             </div>
             <p x-if="state" x-uninit="$console.log('State was changed to false')">State is true</p>
             <p x-if="!state" x-uninit="$console.log('State was changed to true')">State is false</p>
@@ -75,7 +75,7 @@
             <div style="background-color: red; height: 100px;" x-data="{width: 100}" x-style-width="`${width}px`" x-class="{cyan: (width == 200)}" x-click="width = 200 - width + 100"></div>
         </div>
     </div>
-    <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-increment="$console.log('Visible')" x-decrement="$console.log('Hidden')"></div>
+    <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-on-visible="$console.log('Visible')" x-on-hidden="$console.log('Hidden')"></div>
     <script src="./dist/Bundle.js"></script>
     <script src="./dist/ScrollTop.js"></script>
     <script src="./dist/ExtendedHandler.js"></script>

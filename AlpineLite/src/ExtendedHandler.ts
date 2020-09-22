@@ -1,18 +1,25 @@
 namespace AlpineLite{
+    const InputDirtyEvent = new Event('alpine.input.dirty');
+
+    const InputTypingEvent = new Event('alpine.input.typing');
+    const InputStoppedTypingEvent = new Event('alpine.input.stopped.typing');
+    
+    const InputValidEvent = new Event('alpine.input.valid');
+    const InputInvalidEvent = new Event('alpine.input.invalid');
+    
+    const ObservedIncrementEvent = new Event('alpine.observed.increment');
+    const ObservedDecrementEvent = new Event('alpine.observed.decrement');
+    
+    const ObservedVisible = new Event('alpine.observed.visible');
+    const ObservedHidden = new Event('alpine.observed.hidden');
+    
     interface StateCallbackInfo{
-        handlers: Array<(event?: Event) => void>;
         activeValidCheck: boolean;
-        reportInitial: boolean;
         isDirty: boolean;
         isTyping: boolean;
         isValid: boolean;
     };
 
-    interface ObserveCallbackInfo{
-        increment: Array<(ratio: number, prevRatio: number) => void>;
-        decrement: Array<(ratio: number, prevRatio: number) => void>;
-    };
-    
     export class ExtendedHandler{
         private static observers_ = new Array<IntersectionObserver>();
         
@@ -28,13 +35,11 @@ namespace AlpineLite{
 
             let options = Evaluator.Evaluate(directive.value, state, element);
             if (typeof options === 'function'){
-                options = (options as () => {}).call(state.GetValueContext());
+                options = (options as () => void).call(state.GetValueContext());
             }
 
             let callbackInfo: StateCallbackInfo = {
-                handlers: new Array<(event?: Event) => void>(),
                 activeValidCheck: false,
-                reportInitial: false,
                 isDirty: false,
                 isTyping: false,
                 isValid: (element as HTMLInputElement).checkValidity()
@@ -49,31 +54,47 @@ namespace AlpineLite{
                 if (('activeValidCheck' in options) && options['activeValidCheck']){
                     callbackInfo.activeValidCheck = true;
                 }
-
-                if (('reportInitial' in options) && options['reportInitial']){
-                    callbackInfo.reportInitial = true;
-                }
             }
 
-            let map = (element[Handler.GetExternalHandlerKey()] = (element[Handler.GetExternalHandlerKey()] || {}));
-            map['dirty'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleDirty(directive, element, state, callbackInfo);
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['dirty'] = () => {
+                return 'alpine.input.dirty';
             };
 
-            map['typing'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleTyping(directive, element, state, callbackInfo);
+            map['input.dirty'] = () => {
+                return 'alpine.input.dirty';
             };
 
-            map['stoppedTyping'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleStoppedTyping(directive, element, state, callbackInfo);
+            map['typing'] = () => {
+                return 'alpine.input.typing';
             };
 
-            map['valid'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleValid(directive, element, state, callbackInfo);
+            map['input.typing'] = () => {
+                return 'alpine.input.typing';
             };
 
-            map['invalid'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleInvalid(directive, element, state, callbackInfo);
+            map['stopped.typing'] = () => {
+                return 'alpine.input.stopped.typing';
+            };
+
+            map['input.stopped.typing'] = () => {
+                return 'alpine.input.stopped.typing';
+            };
+
+            map['valid'] = () => {
+                return 'alpine.input.valid';
+            };
+
+            map['input.valid'] = () => {
+                return 'alpine.input.valid';
+            };
+
+            map['invalid'] = () => {
+                return 'alpine.input.invalid';
+            };
+
+            map['input.invalid'] = () => {
+                return 'alpine.input.invalid';
             };
 
             let specialKeyMap = (element[Proxy.GetExternalSpecialKey()] = (element[Proxy.GetExternalSpecialKey()] || {}));
@@ -111,21 +132,41 @@ namespace AlpineLite{
             let eventCallback = (event: Event) => {
                 let checkpoint = ++counter;
                 setTimeout(() => {
-                    if (checkpoint == counter){
+                    if (checkpoint != counter){
+                        return;
+                    }
+
+                    if (callbackInfo.isTyping){
                         callbackInfo.isTyping = false;
-                        callbackInfo.handlers.forEach((callback: () => void): void => {
-                            callback();
-                        });
+                        element.dispatchEvent(InputStoppedTypingEvent);
+                    }
+
+                    let isValid = (element as HTMLInputElement).checkValidity();
+                    if (isValid != callbackInfo.isValid){
+                        callbackInfo.isValid = isValid;
+                        if (!callbackInfo.activeValidCheck){
+                            element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                        }
                     }
                 }, stoppedDelay);
 
-                callbackInfo.isDirty = true;
-                callbackInfo.isTyping = true;
-                callbackInfo.isValid = (element as HTMLInputElement).checkValidity();
-                
-                callbackInfo.handlers.forEach((callback: (event: Event) => void): void => {
-                    callback(event);
-                });
+                if (!callbackInfo.isTyping){
+                    callbackInfo.isTyping = true;
+                    element.dispatchEvent(InputTypingEvent);
+                }
+
+                if (!callbackInfo.isDirty){
+                    callbackInfo.isDirty = true;
+                    element.dispatchEvent(InputDirtyEvent);
+                }
+
+                if (callbackInfo.activeValidCheck){
+                    let isValid = (element as HTMLInputElement).checkValidity();
+                    if (isValid != callbackInfo.isValid){
+                        callbackInfo.isValid = isValid;
+                        element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                    }
+                }
             };
 
             element.addEventListener('keydown', eventCallback);
@@ -139,14 +180,9 @@ namespace AlpineLite{
         public static Observe(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             let options = Evaluator.Evaluate(directive.value, state, element);
             if (typeof options === 'function'){
-                options = (options as () => {}).call(state.GetValueContext());
+                options = (options as () => void).call(state.GetValueContext());
             }
 
-            let callbackInfo: ObserveCallbackInfo = {
-                increment: new Array<(ratio: number, prevRatio: number) => void>(),
-                decrement: new Array<(ratio: number, prevRatio: number) => void>()
-            };
-            
             let observerOptions: IntersectionObserverInit = {
                 root: null,
                 rootMargin: '0px',
@@ -170,177 +206,66 @@ namespace AlpineLite{
                 }
             }
 
-            ExtendedHandler.ObserveWith(element, (ratio: number, prevRatio: number, isIncrement: boolean) => {
-                if (isIncrement){//Increment
-                    callbackInfo.increment.forEach((callback: (ratio: number, prevRatio: number) => void) => {
-                        callback(ratio, prevRatio);
-                    });
-                }
-                else{//Decrement
-                    callbackInfo.decrement.forEach((callback: (ratio: number, prevRatio: number) => void) => {
-                        callback(ratio, prevRatio);
-                    });
-                }
-            }, observerOptions);
-
-            let map = (element[Handler.GetExternalHandlerKey()] = (element[Handler.GetExternalHandlerKey()] || {}));
-            map['increment'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleIncrement(directive, element, state, callbackInfo);
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['increment'] = () => {
+                return 'alpine.observed.increment';
             };
 
-            map['decrement'] = (directive: ProcessorDirective, element: HTMLElement, state: State) => {
-                return ExtendedHandler.HandleDecrement(directive, element, state, callbackInfo);
+            map['observed.increment'] = () => {
+                return 'alpine.observed.increment';
             };
-            
-            return HandlerReturn.Handled;
-        }
 
-        public static HandleDirty(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            let wasDirty = false;
-            callbackInfo.handlers.push((event: Event): void => {
-                if (!wasDirty && callbackInfo.isDirty){
-                    wasDirty = true;
-                    
-                    let result = Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function'){
-                        (result as () => {}).call(state.GetValueContext());
-                    }
-                }
-            });
+            map['decrement'] = () => {
+                return 'alpine.observed.decrement';
+            };
 
-            return HandlerReturn.Handled;
-        }
+            map['observed.decrement'] = () => {
+                return 'alpine.observed.decrement';
+            };
 
-        public static HandleTyping(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            let wasTyping = false;
-            callbackInfo.handlers.push((event: Event): void => {
-                if (!wasTyping && callbackInfo.isTyping){
-                    wasTyping = true;
+            map['visible'] = () => {
+                return 'alpine.observed.visible';
+            };
 
-                    let result = Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function'){
-                        (result as () => {}).call(state.GetValueContext());
-                    }
-                }
-            });
+            map['observed.visible'] = () => {
+                return 'alpine.observed.visible';
+            };
 
-            return HandlerReturn.Handled;
-        }
+            map['hidden'] = () => {
+                return 'alpine.observed.hidden';
+            };
 
-        public static HandleStoppedTyping(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            callbackInfo.handlers.push((): void => {
-                if (!callbackInfo.isTyping){
-                    let result = Evaluator.Evaluate(directive.value, state, element);
-                    if (typeof result === 'function'){
-                        (result as () => {}).call(state.GetValueContext());
-                    }
-                }
-            });
+            map['observed.hidden'] = () => {
+                return 'alpine.observed.hidden';
+            };
 
-            return HandlerReturn.Handled;
-        }
-
-        public static HandleValid(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            if (element.tagName !== 'INPUT'){
-                return HandlerReturn.Nil;
-            }
-            
-            let wasValid = callbackInfo.isValid;
-            if (wasValid && callbackInfo.reportInitial){
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
-                }
-            }
-            
-            callbackInfo.handlers.push((): void => {
-                if (!callbackInfo.isValid){
-                    wasValid = false;
-                    return;
-                }
-
-                if (wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck){
-                    return;
-                }
-                
-                wasValid = true;
-
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
-                }
-            });
-
-            return HandlerReturn.Handled;
-        }
-
-        public static HandleInvalid(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: StateCallbackInfo): HandlerReturn{
-            if (element.tagName !== 'INPUT'){
-                return HandlerReturn.Nil;
-            }
-            
-            let wasValid = callbackInfo.isValid;
-            if (!wasValid && callbackInfo.reportInitial){
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
-                }
-            }
-
-            callbackInfo.handlers.push((): void => {
-                if (callbackInfo.isValid){
-                    wasValid = false;
-                    return;
-                }
-
-                if (!wasValid || callbackInfo.isTyping != callbackInfo.activeValidCheck){
-                    return;
-                }
-                
-                wasValid = false;
-                
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as () => {}).call(state.GetValueContext());
-                }
-            });
-            
-            return HandlerReturn.Handled;
-        }
-
-        public static HandleIncrement(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: ObserveCallbackInfo): HandlerReturn{
-            callbackInfo.increment.push((ratio: number, prevRatio: number): void => {
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as (ratio: number, prevRatio: number) => {}).call(state.GetValueContext(), ratio, prevRatio);
-                }
-            });
-
-            return HandlerReturn.Handled;
-        }
-
-        public static HandleDecrement(directive: ProcessorDirective, element: HTMLElement, state: State, callbackInfo: ObserveCallbackInfo): HandlerReturn{
-            callbackInfo.decrement.push((ratio: number, prevRatio: number): void => {
-                let result = Evaluator.Evaluate(directive.value, state, element);
-                if (typeof result === 'function'){
-                    (result as (ratio: number, prevRatio: number) => {}).call(state.GetValueContext(), ratio, prevRatio);
-                }
-            });
-            
-            return HandlerReturn.Handled;
-        }
-
-        public static ObserveWith(element: HTMLElement, callback: (ratio: number, prevRatio: number, isIncrement: boolean) => void, options: IntersectionObserverInit): void{
-            let previousRatio = 0.0;
+            let previousRatio = 0;
             let observer = new IntersectionObserver((entries: IntersectionObserverEntry[]) => {
                 entries.forEach((entry: IntersectionObserverEntry) => {
-                    callback(entry.intersectionRatio, previousRatio, (entry.isIntersecting && previousRatio < entry.intersectionRatio));
-                    previousRatio = entry.intersectionRatio;
+                    if (!entry.isIntersecting){//Hidden
+                        element.dispatchEvent(ObservedDecrementEvent);
+                        element.dispatchEvent(ObservedHidden);
+                        previousRatio = 0;
+                    }
+                    else if (previousRatio < entry.intersectionRatio){//Increment
+                        if (previousRatio == 0){//Visible
+                            element.dispatchEvent(ObservedVisible);
+                        }
+
+                        element.dispatchEvent(ObservedIncrementEvent);
+                        previousRatio = entry.intersectionRatio;
+                    }
+                    else{//Decrement
+                        element.dispatchEvent(ObservedDecrementEvent);
+                        previousRatio = entry.intersectionRatio;
+                    }
                 });
-            }, options);
+            }, observerOptions);
 
             ExtendedHandler.observers_.push(observer);
             observer.observe(element);
+
+            return HandlerReturn.Handled;
         }
 
         public static AddAll(){
