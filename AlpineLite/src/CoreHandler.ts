@@ -284,11 +284,13 @@ export namespace AlpineLite{
                 }
             };
 
-            element.addEventListener('input', onEvent);
             if (!isCheckable && element.tagName !== 'SELECT'){
-                element.addEventListener('keydown', onEvent);
+                element.addEventListener('input', onEvent);
                 element.addEventListener('paste', onEvent);
                 element.addEventListener('cut', onEvent);
+            }
+            else{
+                element.addEventListener('change', onEvent);
             }
         }
 

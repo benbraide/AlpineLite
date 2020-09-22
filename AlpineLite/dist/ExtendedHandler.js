@@ -130,7 +130,6 @@ var AlpineLite;
                     }
                 }
             };
-            element.addEventListener('keydown', eventCallback);
             element.addEventListener('input', eventCallback);
             element.addEventListener('paste', eventCallback);
             element.addEventListener('cut', eventCallback);
@@ -188,7 +187,8 @@ var AlpineLite;
             let previousRatio = 0;
             let observer = new IntersectionObserver((entries) => {
                 entries.forEach((entry) => {
-                    if (!entry.isIntersecting) { //Hidden
+                    let isIntersecting = (!('isIntersecting' in entry) ? (0 < entry.intersectionRatio) : entry.isIntersecting);
+                    if (!isIntersecting) { //Hidden
                         element.dispatchEvent(ObservedDecrementEvent);
                         element.dispatchEvent(ObservedHidden);
                         previousRatio = 0;

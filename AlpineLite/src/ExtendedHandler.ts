@@ -169,7 +169,6 @@ namespace AlpineLite{
                 }
             };
 
-            element.addEventListener('keydown', eventCallback);
             element.addEventListener('input', eventCallback);
             element.addEventListener('paste', eventCallback);
             element.addEventListener('cut', eventCallback);
@@ -242,7 +241,8 @@ namespace AlpineLite{
             let previousRatio = 0;
             let observer = new IntersectionObserver((entries: IntersectionObserverEntry[]) => {
                 entries.forEach((entry: IntersectionObserverEntry) => {
-                    if (!entry.isIntersecting){//Hidden
+                    let isIntersecting = (!('isIntersecting' in entry) ? (0 < (entry as IntersectionObserverEntry).intersectionRatio) : entry.isIntersecting);
+                    if (!isIntersecting){//Hidden
                         element.dispatchEvent(ObservedDecrementEvent);
                         element.dispatchEvent(ObservedHidden);
                         previousRatio = 0;

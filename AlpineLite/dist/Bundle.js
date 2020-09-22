@@ -1742,11 +1742,13 @@ var AlpineLite;
                     Evaluator.Evaluate(`(${directive.value})=${getValue()}`, state, element);
                 }
             };
-            element.addEventListener('input', onEvent);
             if (!isCheckable && element.tagName !== 'SELECT') {
-                element.addEventListener('keydown', onEvent);
+                element.addEventListener('input', onEvent);
                 element.addEventListener('paste', onEvent);
                 element.addEventListener('cut', onEvent);
+            }
+            else {
+                element.addEventListener('change', onEvent);
             }
         }
         static Show(directive, element, state) {
