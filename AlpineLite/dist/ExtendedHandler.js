@@ -1,23 +1,32 @@
 "use strict";
 var AlpineLite;
 (function (AlpineLite) {
-    const InputDirtyEvent = new Event('alpine.input.dirty');
-    const InputTypingEvent = new Event('alpine.input.typing');
-    const InputStoppedTypingEvent = new Event('alpine.input.stopped.typing');
-    const InputValidEvent = new Event('alpine.input.valid');
-    const InputInvalidEvent = new Event('alpine.input.invalid');
-    const ObservedIncrementEvent = new Event('alpine.observed.increment');
-    const ObservedDecrementEvent = new Event('alpine.observed.decrement');
-    const ObservedVisible = new Event('alpine.observed.visible');
-    const ObservedHidden = new Event('alpine.observed.hidden');
+    const InputDirtyEvent = new CustomEvent('alpine.input.dirty', { bubbles: true });
+    const InputCleanEvent = new CustomEvent('alpine.input.clean', { bubbles: true });
+    const InputResetDirtyEvent = new Event('alpine.input.reset.dirty');
+    const InputTypingEvent = new CustomEvent('alpine.input.typing', { bubbles: true });
+    const InputStoppedTypingEvent = new CustomEvent('alpine.input.stopped.typing', { bubbles: true });
+    const InputValidEvent = new CustomEvent('alpine.input.valid', { bubbles: true });
+    const InputInvalidEvent = new CustomEvent('alpine.input.invalid', { bubbles: true });
+    const ObservedIncrementEvent = new CustomEvent('alpine.observed.increment', { bubbles: true });
+    const ObservedDecrementEvent = new CustomEvent('alpine.observed.decrement', { bubbles: true });
+    const ObservedVisible = new CustomEvent('alpine.observed.visible', { bubbles: true });
+    const ObservedHidden = new CustomEvent('alpine.observed.hidden', { bubbles: true });
     ;
     class ExtendedHandler {
         static State(directive, element, state) {
-            if (element.tagName !== 'INPUT' && element.tagName !== 'TEXTAREA') {
-                return AlpineLite.HandlerReturn.Nil;
+            let isText = false, isForm = false;
+            if (element.tagName === 'INPUT') {
+                let type = element.type;
+                isText = (type === 'text' || type === 'password' || type === 'email' || type === 'search' || type === 'number' || type === 'tel' || type === 'url');
             }
-            let type = ((element.tagName === 'INPUT') ? element.type : 'text');
-            if (type !== 'text' && type !== 'password' && type !== 'email' && type !== 'search' && type !== 'number' && type !== 'tel' && type !== 'url') {
+            else if (element.tagName === 'TEXTAREA') {
+                isText = true;
+            }
+            else if (element.tagName === 'FORM') {
+                isForm = true;
+            }
+            else if (element.tagName !== 'SELECT') {
                 return AlpineLite.HandlerReturn.Nil;
             }
             let options = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
@@ -95,6 +104,116 @@ var AlpineLite;
                     return callbackInfo.isValid;
                 });
             };
+            if (isForm) {
+                let inputs = element.querySelectorAll('input');
+                let textAreas = element.querySelectorAll('textarea');
+                let selects = element.querySelectorAll('select');
+                let totalCount = (inputs.length + textAreas.length + selects.length), dirtyCount = 0, typingCount = 0, validCount = 0;
+                element.addEventListener(InputDirtyEvent.type, (event) => {
+                    if (++dirtyCount == 1) {
+                        callbackInfo.isDirty = true;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                element.addEventListener(InputCleanEvent.type, (event) => {
+                    if (--dirtyCount == 0) {
+                        callbackInfo.isDirty = false;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                element.addEventListener(InputResetDirtyEvent.type, (event) => {
+                    if (event.target !== element) { //Bubbled
+                        return;
+                    }
+                    inputs.forEach((elem) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+                    textAreas.forEach((elem) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+                    selects.forEach((elem) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+                });
+                element.addEventListener(InputTypingEvent.type, (event) => {
+                    if (++typingCount == 1) {
+                        callbackInfo.isTyping = true;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                element.addEventListener(InputStoppedTypingEvent.type, (event) => {
+                    if (--typingCount == 0) {
+                        callbackInfo.isTyping = false;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                element.addEventListener(InputValidEvent.type, (event) => {
+                    if (++validCount == totalCount) {
+                        callbackInfo.isValid = true;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                element.addEventListener(InputInvalidEvent.type, (event) => {
+                    --validCount;
+                    if (callbackInfo.isValid) {
+                        callbackInfo.isValid = false;
+                    }
+                    else {
+                        event.stopImmediatePropagation();
+                    }
+                });
+                let childOptions = JSON.stringify({
+                    stoppedDelay: stoppedDelay,
+                    activeValidCheck: callbackInfo.activeValidCheck
+                });
+                inputs.forEach((elem) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+                    if (elem.checkValidity()) {
+                        ++validCount;
+                    }
+                });
+                textAreas.forEach((elem) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+                    if (elem.checkValidity()) {
+                        ++validCount;
+                    }
+                });
+                selects.forEach((elem) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+                    if (elem.checkValidity()) {
+                        ++validCount;
+                    }
+                });
+                return AlpineLite.HandlerReturn.Handled;
+            }
             let counter = 0;
             let eventCallback = (event) => {
                 let checkpoint = ++counter;
@@ -102,7 +221,7 @@ var AlpineLite;
                     if (checkpoint != counter) {
                         return;
                     }
-                    if (callbackInfo.isTyping) {
+                    if (isText && callbackInfo.isTyping) {
                         callbackInfo.isTyping = false;
                         element.dispatchEvent(InputStoppedTypingEvent);
                     }
@@ -114,7 +233,7 @@ var AlpineLite;
                         }
                     }
                 }, stoppedDelay);
-                if (!callbackInfo.isTyping) {
+                if (isText && !callbackInfo.isTyping) {
                     callbackInfo.isTyping = true;
                     element.dispatchEvent(InputTypingEvent);
                 }
@@ -130,9 +249,17 @@ var AlpineLite;
                     }
                 }
             };
-            element.addEventListener('input', eventCallback);
-            element.addEventListener('paste', eventCallback);
-            element.addEventListener('cut', eventCallback);
+            if (isText) {
+                element.addEventListener('input', eventCallback);
+                element.addEventListener('paste', eventCallback);
+                element.addEventListener('cut', eventCallback);
+            }
+            else {
+                element.addEventListener('change', eventCallback);
+            }
+            element.addEventListener(InputResetDirtyEvent.type, (event) => {
+                callbackInfo.isDirty = false;
+            });
             return AlpineLite.HandlerReturn.Handled;
         }
         static Observe(directive, element, state) {
@@ -214,7 +341,7 @@ var AlpineLite;
             AlpineLite.Handler.AddDirectiveHandler('state', ExtendedHandler.State);
             AlpineLite.Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
         }
-    } //Implement lazy loading and correct scroll to top; Bind functions returned when handling directives
+    }
     ExtendedHandler.observers_ = new Array();
     AlpineLite.ExtendedHandler = ExtendedHandler;
     (function () {

@@ -1,17 +1,20 @@
 namespace AlpineLite{
-    const InputDirtyEvent = new Event('alpine.input.dirty');
+    const InputDirtyEvent = new CustomEvent('alpine.input.dirty', { bubbles: true });
+    const InputCleanEvent = new CustomEvent('alpine.input.clean', { bubbles: true });
 
-    const InputTypingEvent = new Event('alpine.input.typing');
-    const InputStoppedTypingEvent = new Event('alpine.input.stopped.typing');
+    const InputResetDirtyEvent = new Event('alpine.input.reset.dirty');
+
+    const InputTypingEvent = new CustomEvent('alpine.input.typing', { bubbles: true });
+    const InputStoppedTypingEvent = new CustomEvent('alpine.input.stopped.typing', { bubbles: true });
     
-    const InputValidEvent = new Event('alpine.input.valid');
-    const InputInvalidEvent = new Event('alpine.input.invalid');
+    const InputValidEvent = new CustomEvent('alpine.input.valid', { bubbles: true });
+    const InputInvalidEvent = new CustomEvent('alpine.input.invalid', { bubbles: true });
     
-    const ObservedIncrementEvent = new Event('alpine.observed.increment');
-    const ObservedDecrementEvent = new Event('alpine.observed.decrement');
+    const ObservedIncrementEvent = new CustomEvent('alpine.observed.increment', { bubbles: true });
+    const ObservedDecrementEvent = new CustomEvent('alpine.observed.decrement', { bubbles: true });
     
-    const ObservedVisible = new Event('alpine.observed.visible');
-    const ObservedHidden = new Event('alpine.observed.hidden');
+    const ObservedVisible = new CustomEvent('alpine.observed.visible', { bubbles: true });
+    const ObservedHidden = new CustomEvent('alpine.observed.hidden', { bubbles: true });
     
     interface StateCallbackInfo{
         activeValidCheck: boolean;
@@ -24,15 +27,21 @@ namespace AlpineLite{
         private static observers_ = new Array<IntersectionObserver>();
         
         public static State(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            if (element.tagName !== 'INPUT' && element.tagName !== 'TEXTAREA'){
+            let isText: boolean = false, isForm: boolean = false;
+            if (element.tagName === 'INPUT'){
+                let type = (element as HTMLInputElement).type;
+                isText = (type === 'text' || type === 'password' || type === 'email' || type === 'search' || type === 'number' || type === 'tel' || type === 'url');
+            }
+            else if (element.tagName === 'TEXTAREA'){
+                isText = true;
+            }
+            else if (element.tagName === 'FORM'){
+                isForm = true;
+            }
+            else if (element.tagName !== 'SELECT'){
                 return HandlerReturn.Nil;
             }
             
-            let type = ((element.tagName === 'INPUT') ? (element as HTMLInputElement).type : 'text');
-            if (type !== 'text' && type !== 'password' && type !== 'email' && type !== 'search' && type !== 'number' && type !== 'tel' && type !== 'url'){
-                return HandlerReturn.Nil;
-            }
-
             let options = Evaluator.Evaluate(directive.value, state, element);
             if (typeof options === 'function'){
                 options = (options as () => void).call(state.GetValueContext());
@@ -127,6 +136,135 @@ namespace AlpineLite{
                     return callbackInfo.isValid;
                 });
             };
+
+            if (isForm){
+                let inputs = element.querySelectorAll('input');
+                let textAreas = element.querySelectorAll('textarea');
+                let selects = element.querySelectorAll('select');
+                
+                let totalCount = (inputs.length + textAreas.length + selects.length), dirtyCount = 0, typingCount = 0, validCount = 0;
+                element.addEventListener(InputDirtyEvent.type, (event: Event) => {
+                    if (++dirtyCount == 1){
+                        callbackInfo.isDirty = true;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+
+                element.addEventListener(InputCleanEvent.type, (event: Event) => {
+                    if (--dirtyCount == 0){
+                        callbackInfo.isDirty = false;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+
+                element.addEventListener(InputResetDirtyEvent.type, (event: Event) => {
+                    if (event.target !== element){//Bubbled
+                        return;
+                    }
+                    
+                    inputs.forEach((elem: HTMLInputElement) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+
+                    textAreas.forEach((elem: HTMLTextAreaElement) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+
+                    selects.forEach((elem: HTMLSelectElement) => {
+                        elem.dispatchEvent(InputResetDirtyEvent);
+                    });
+                });
+                
+                element.addEventListener(InputTypingEvent.type, (event: Event) => {
+                    if (++typingCount == 1){
+                        callbackInfo.isTyping = true;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+
+                element.addEventListener(InputStoppedTypingEvent.type, (event: Event) => {
+                    if (--typingCount == 0){
+                        callbackInfo.isTyping = false;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+
+                element.addEventListener(InputValidEvent.type, (event: Event) => {
+                    if (++validCount == totalCount){
+                        callbackInfo.isValid = true;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+
+                element.addEventListener(InputInvalidEvent.type, (event: Event) => {
+                    --validCount;
+                    if (callbackInfo.isValid){
+                        callbackInfo.isValid = false;
+                    }
+                    else{
+                        event.stopImmediatePropagation();
+                    }
+                });
+                
+                let childOptions = JSON.stringify({
+                    stoppedDelay: stoppedDelay,
+                    activeValidCheck: callbackInfo.activeValidCheck
+                });
+                
+                inputs.forEach((elem: HTMLInputElement) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+
+                    if (elem.checkValidity()){
+                        ++validCount;
+                    }
+                });
+
+                textAreas.forEach((elem: HTMLTextAreaElement) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+
+                    if (elem.checkValidity()){
+                        ++validCount;
+                    }
+                });
+
+                selects.forEach((elem: HTMLSelectElement) => {
+                    ExtendedHandler.State({
+                        original: null,
+                        parts: null,
+                        raw: null,
+                        key: null,
+                        value: childOptions
+                    }, elem, state);
+
+                    if (elem.checkValidity()){
+                        ++validCount;
+                    }
+                });
+                
+                return HandlerReturn.Handled;
+            }
             
             let counter = 0;
             let eventCallback = (event: Event) => {
@@ -136,7 +274,7 @@ namespace AlpineLite{
                         return;
                     }
 
-                    if (callbackInfo.isTyping){
+                    if (isText && callbackInfo.isTyping){
                         callbackInfo.isTyping = false;
                         element.dispatchEvent(InputStoppedTypingEvent);
                     }
@@ -150,7 +288,7 @@ namespace AlpineLite{
                     }
                 }, stoppedDelay);
 
-                if (!callbackInfo.isTyping){
+                if (isText && !callbackInfo.isTyping){
                     callbackInfo.isTyping = true;
                     element.dispatchEvent(InputTypingEvent);
                 }
@@ -169,9 +307,18 @@ namespace AlpineLite{
                 }
             };
 
-            element.addEventListener('input', eventCallback);
-            element.addEventListener('paste', eventCallback);
-            element.addEventListener('cut', eventCallback);
+            if (isText){
+                element.addEventListener('input', eventCallback);
+                element.addEventListener('paste', eventCallback);
+                element.addEventListener('cut', eventCallback);
+            }
+            else{
+                element.addEventListener('change', eventCallback);
+            }
+
+            element.addEventListener(InputResetDirtyEvent.type, (event: Event) => {
+                callbackInfo.isDirty = false;
+            });
             
             return HandlerReturn.Handled;
         }
@@ -272,7 +419,7 @@ namespace AlpineLite{
             Handler.AddDirectiveHandler('state', ExtendedHandler.State);
             Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
         }
-    }//Implement lazy loading and correct scroll to top; Bind functions returned when handling directives
+    }
 
     (function(){
         ExtendedHandler.AddAll();
