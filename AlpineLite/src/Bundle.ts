@@ -645,7 +645,7 @@ namespace AlpineLite{
                 return null;
             }
 
-            if (target instanceof Node || target instanceof DOMTokenList){
+            if (target instanceof Node || target instanceof DOMTokenList || target instanceof ProxyNoResult || target instanceof Value){
                 return null;
             }
 
@@ -1113,6 +1113,19 @@ namespace AlpineLite{
                 });
             });
 
+            addRootKey('dispatchEvent', (proxy: Proxy): any => {
+                return (element: HTMLElement, event: Event, nextCycle: boolean = true) => {
+                    if (nextCycle){
+                        setTimeout(() => {
+                            element.dispatchEvent(event);
+                        }, 0);
+                    }
+                    else{
+                        element.dispatchEvent(event);
+                    }
+                };
+            });
+
             addRootKey('self', (proxy: Proxy): any => {
                 return new Value(() => {
                     return proxy.GetContextElement();
@@ -1201,6 +1214,12 @@ namespace AlpineLite{
                     }
                     
                     return list;
+                });
+            });
+
+            addRootKey('', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.GetProxy();
                 });
             });
 
@@ -2153,6 +2172,7 @@ namespace AlpineLite{
             if (element.tagName === 'INPUT'){
                 let inputElement = (element as HTMLInputElement);
                 if (inputElement.type === 'checkbox' || inputElement.type === 'radio'){
+                    isCheckable = true;
                     getValue = (): string => {
                         return 'this.checked';
                     };
@@ -2162,8 +2182,6 @@ namespace AlpineLite{
                         return 'this.value';
                     };
                 }
-
-                isCheckable = true;
             }
             else if (element.tagName === 'TEXTAREA' || element.tagName === 'SELECT'){
                 getValue = (): string => {

@@ -55,6 +55,12 @@ var AlpineLite;
             map['input.dirty'] = () => {
                 return 'alpine.input.dirty';
             };
+            map['clean'] = () => {
+                return 'alpine.input.clean';
+            };
+            map['input.clean'] = () => {
+                return 'alpine.input.clean';
+            };
             map['typing'] = () => {
                 return 'alpine.input.typing';
             };
@@ -79,31 +85,35 @@ var AlpineLite;
             map['input.invalid'] = () => {
                 return 'alpine.input.invalid';
             };
-            let specialKeyMap = (element[AlpineLite.Proxy.GetExternalSpecialKey()] = (element[AlpineLite.Proxy.GetExternalSpecialKey()] || {}));
-            specialKeyMap['$isDirty'] = (proxy) => {
-                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
-                    return new AlpineLite.ProxyNoResult();
-                }
-                return new AlpineLite.Value(() => {
-                    return callbackInfo.isDirty;
+            let locals;
+            let proxyKey = AlpineLite.Proxy.GetProxyKey();
+            if (!(proxyKey in element)) {
+                let raw = {};
+                let localProxy = AlpineLite.Proxy.Create({
+                    target: raw,
+                    name: state.GetElementId(element),
+                    parent: null,
+                    element: element,
+                    state: state
                 });
-            };
-            specialKeyMap['$isTyping'] = (proxy) => {
-                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
-                    return new AlpineLite.ProxyNoResult();
-                }
-                return new AlpineLite.Value(() => {
-                    return callbackInfo.isTyping;
-                });
-            };
-            specialKeyMap['$isValid'] = (proxy) => {
-                if (!proxy.IsRoot() || proxy.GetDetails().element) { //Root required
-                    return new AlpineLite.ProxyNoResult();
-                }
-                return new AlpineLite.Value(() => {
-                    return callbackInfo.isValid;
-                });
-            };
+                element[proxyKey] = {
+                    raw: raw,
+                    proxy: localProxy
+                };
+            }
+            locals = element[proxyKey];
+            locals.raw['$isDirty'] = new AlpineLite.Value(() => {
+                return callbackInfo.isDirty;
+            });
+            locals.raw['$isTyping'] = new AlpineLite.Value(() => {
+                return callbackInfo.isTyping;
+            });
+            locals.raw['$isValid'] = new AlpineLite.Value(() => {
+                return callbackInfo.isValid;
+            });
+            locals.raw['$resetDirtyEvent'] = new AlpineLite.Value(() => {
+                return new Event('alpine.input.reset.dirty');
+            });
             if (isForm) {
                 let inputs = element.querySelectorAll('input');
                 let textAreas = element.querySelectorAll('textarea');
@@ -258,7 +268,10 @@ var AlpineLite;
                 element.addEventListener('change', eventCallback);
             }
             element.addEventListener(InputResetDirtyEvent.type, (event) => {
-                callbackInfo.isDirty = false;
+                if (callbackInfo.isDirty) {
+                    callbackInfo.isDirty = false;
+                    element.dispatchEvent(InputCleanEvent);
+                }
             });
             return AlpineLite.HandlerReturn.Handled;
         }

@@ -274,7 +274,7 @@ export namespace AlpineLite{
                 return null;
             }
 
-            if (target instanceof Node || target instanceof DOMTokenList){
+            if (target instanceof Node || target instanceof DOMTokenList || target instanceof ProxyNoResult || target instanceof ValueScope.AlpineLite.Value){
                 return null;
             }
 
@@ -742,6 +742,19 @@ export namespace AlpineLite{
                 });
             });
 
+            addRootKey('dispatchEvent', (proxy: Proxy): any => {
+                return (element: HTMLElement, event: Event, nextCycle: boolean = true) => {
+                    if (nextCycle){
+                        setTimeout(() => {
+                            element.dispatchEvent(event);
+                        }, 0);
+                    }
+                    else{
+                        element.dispatchEvent(event);
+                    }
+                };
+            });
+
             addRootKey('self', (proxy: Proxy): any => {
                 return new ValueScope.AlpineLite.Value(() => {
                     return proxy.GetContextElement();
@@ -830,6 +843,12 @@ export namespace AlpineLite{
                     }
                     
                     return list;
+                });
+            });
+
+            addRootKey('', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy.GetProxy();
                 });
             });
 

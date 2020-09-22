@@ -494,7 +494,7 @@ var AlpineLite;
             if (!target || targetType === 'string' || targetType === 'function' || targetType !== 'object') {
                 return null;
             }
-            if (target instanceof Node || target instanceof DOMTokenList) {
+            if (target instanceof Node || target instanceof DOMTokenList || target instanceof ProxyNoResult || target instanceof Value) {
                 return null;
             }
             return new Proxy(details);
@@ -867,6 +867,18 @@ var AlpineLite;
                     return proxy.details_.state.GetEventContext();
                 });
             });
+            addRootKey('dispatchEvent', (proxy) => {
+                return (element, event, nextCycle = true) => {
+                    if (nextCycle) {
+                        setTimeout(() => {
+                            element.dispatchEvent(event);
+                        }, 0);
+                    }
+                    else {
+                        element.dispatchEvent(event);
+                    }
+                };
+            });
             addRootKey('self', (proxy) => {
                 return new Value(() => {
                     return proxy.GetContextElement();
@@ -938,6 +950,11 @@ var AlpineLite;
                         list.push(children[i]);
                     }
                     return list;
+                });
+            });
+            addRootKey('', (proxy) => {
+                return new Value(() => {
+                    return proxy.GetProxy();
                 });
             });
             addRootKey('component', (proxy) => {
@@ -1714,6 +1731,7 @@ var AlpineLite;
             if (element.tagName === 'INPUT') {
                 let inputElement = element;
                 if (inputElement.type === 'checkbox' || inputElement.type === 'radio') {
+                    isCheckable = true;
                     getValue = () => {
                         return 'this.checked';
                     };
@@ -1723,7 +1741,6 @@ var AlpineLite;
                         return 'this.value';
                     };
                 }
-                isCheckable = true;
             }
             else if (element.tagName === 'TEXTAREA' || element.tagName === 'SELECT') {
                 getValue = () => {

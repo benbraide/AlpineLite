@@ -252,6 +252,7 @@ export namespace AlpineLite{
             if (element.tagName === 'INPUT'){
                 let inputElement = (element as HTMLInputElement);
                 if (inputElement.type === 'checkbox' || inputElement.type === 'radio'){
+                    isCheckable = true;
                     getValue = (): string => {
                         return 'this.checked';
                     };
@@ -261,8 +262,6 @@ export namespace AlpineLite{
                         return 'this.value';
                     };
                 }
-
-                isCheckable = true;
             }
             else if (element.tagName === 'TEXTAREA' || element.tagName === 'SELECT'){
                 getValue = (): string => {
