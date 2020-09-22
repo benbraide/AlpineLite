@@ -75,6 +75,7 @@
             <div style="background-color: red; height: 100px;" x-data="{width: 100}" x-style-width="`${width}px`" x-class="{cyan: (width == 200)}" x-click="width = 200 - width + 100"></div>
         </div>
     </div>
+    <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-increment="$console.log('Visible')" x-decrement="$console.log('Hidden')"></div>
     <script src="./dist/Bundle.js"></script>
     <script src="./dist/ScrollTop.js"></script>
     <script src="./dist/ExtendedHandler.js"></script>
