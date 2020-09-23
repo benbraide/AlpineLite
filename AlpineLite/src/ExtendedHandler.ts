@@ -434,9 +434,58 @@ namespace AlpineLite{
             return HandlerReturn.Handled;
         }
 
+        public static LazyLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            let options = Evaluator.Evaluate(directive.value, state, element);
+            if (typeof options === 'function'){
+                options = (options as () => void).call(state.GetValueContext());
+            }
+
+            if (!options){
+                return HandlerReturn.Nil;
+            }
+
+            if (typeof options !== 'object'){
+                options = {
+                    threshold: 0.5,
+                    url: options
+                };
+            }
+            else if (!('url' in options) || !options['url']){
+                return HandlerReturn.Nil;
+            }
+
+            if (!('threshold' in options)){
+                options['threshold'] = 0.5;
+            }
+
+            element.addEventListener(ObservedVisible.type, (event: Event) => {
+                if (element.tagName !== 'IMG'){
+                    fetch(options['url'])
+                    .then((response) => response.text())
+                    .then((data) => {
+                        element.innerHTML = data;
+                    });
+                }
+                else{
+                    (element as HTMLImageElement).src = options['url'];
+                }
+            });
+
+            ExtendedHandler.Observe({
+                original: null,
+                parts: null,
+                raw: null,
+                key: null,
+                value: JSON.stringify(options)
+            }, element, state);
+
+            return HandlerReturn.Handled;
+        }
+
         public static AddAll(){
             Handler.AddDirectiveHandler('state', ExtendedHandler.State);
             Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
+            Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
         }
     }
 

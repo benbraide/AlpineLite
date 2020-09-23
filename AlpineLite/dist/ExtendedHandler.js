@@ -350,9 +350,51 @@ var AlpineLite;
             observer.observe(element);
             return AlpineLite.HandlerReturn.Handled;
         }
+        static LazyLoad(directive, element, state) {
+            let options = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+            if (typeof options === 'function') {
+                options = options.call(state.GetValueContext());
+            }
+            if (!options) {
+                return AlpineLite.HandlerReturn.Nil;
+            }
+            if (typeof options !== 'object') {
+                options = {
+                    threshold: 0.5,
+                    url: options
+                };
+            }
+            else if (!('url' in options) || !options['url']) {
+                return AlpineLite.HandlerReturn.Nil;
+            }
+            if (!('threshold' in options)) {
+                options['threshold'] = 0.5;
+            }
+            element.addEventListener(ObservedVisible.type, (event) => {
+                if (element.tagName !== 'IMG') {
+                    fetch(options['url'])
+                        .then((response) => response.text())
+                        .then((data) => {
+                        element.innerHTML = data;
+                    });
+                }
+                else {
+                    element.src = options['url'];
+                }
+            });
+            ExtendedHandler.Observe({
+                original: null,
+                parts: null,
+                raw: null,
+                key: null,
+                value: JSON.stringify(options)
+            }, element, state);
+            return AlpineLite.HandlerReturn.Handled;
+        }
         static AddAll() {
             AlpineLite.Handler.AddDirectiveHandler('state', ExtendedHandler.State);
             AlpineLite.Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
+            AlpineLite.Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
         }
     }
     ExtendedHandler.observers_ = new Array();
