@@ -140,6 +140,7 @@ declare namespace AlpineLite {
         static AddSpecialKey(key: string, handler: ProxySpecialKeyHandler): void;
         static HandleSpecialKey(name: string, proxy: Proxy): any;
         static AddCoreSpecialKeys(): void;
+        static Watch(target: string, element: HTMLElement, state: State, callback: (value: any) => boolean): void;
         static GetExternalSpecialKey(): string;
     }
     export class Evaluator {

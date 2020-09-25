@@ -1,33 +1,36 @@
 namespace AlpineLite{
-    const InputDirtyEvent = new CustomEvent('alpine.input.dirty', { bubbles: true });
-    const InputCleanEvent = new CustomEvent('alpine.input.clean', { bubbles: true });
+    const InputDirtyEvent = 'alpinelite.input.dirty';
+    const InputCleanEvent = 'alpinelite.input.clean';
 
-    const InputResetDirtyEvent = new Event('alpine.input.reset.dirty');
+    const InputResetDirtyEvent = 'alpinelite.input.reset.dirty';
 
-    const InputTypingEvent = new CustomEvent('alpine.input.typing', { bubbles: true });
-    const InputStoppedTypingEvent = new CustomEvent('alpine.input.stopped.typing', { bubbles: true });
+    const InputTypingEvent = 'alpinelite.input.typing';
+    const InputStoppedTypingEvent = 'alpinelite.input.stopped.typing';
     
-    const InputValidEvent = new CustomEvent('alpine.input.valid', { bubbles: true });
-    const InputInvalidEvent = new CustomEvent('alpine.input.invalid', { bubbles: true });
+    const InputValidEvent = 'alpinelite.input.valid';
+    const InputInvalidEvent = 'alpinelite.input.invalid';
     
-    const ObservedIncrementEvent = new CustomEvent('alpine.observed.increment', { bubbles: true });
-    const ObservedDecrementEvent = new CustomEvent('alpine.observed.decrement', { bubbles: true });
+    const ObservedIncrementEvent = 'alpinelite.observed.increment';
+    const ObservedDecrementEvent = 'alpinelite.observed.decrement';
     
-    const ObservedVisible = new CustomEvent('alpine.observed.visible', { bubbles: true });
-    const ObservedHidden = new CustomEvent('alpine.observed.hidden', { bubbles: true });
+    const ObservedVisibleEvent = 'alpinelite.observed.visible';
+    const ObservedHiddenEvent = 'alpinelite.observed.hidden';
+
+    const ObservedUnsupportedEvent = 'alpinelite.observed.unsupported';
+    const LazyLoadedEvent = 'alpinelite.lazy.loaded';
     
     interface StateCallbackInfo{
         activeValidCheck: boolean;
         isDirty: boolean;
         isTyping: boolean;
         isValid: boolean;
-    };
+    }
 
     export class ExtendedHandler{
         private static observers_ = new Array<IntersectionObserver>();
         
         public static State(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            let isText: boolean = false, isForm: boolean = false;
+            let isText: boolean = false, isUnknown: boolean = false;
             if (element.tagName === 'INPUT'){
                 let type = (element as HTMLInputElement).type;
                 isText = (type === 'text' || type === 'password' || type === 'email' || type === 'search' || type === 'number' || type === 'tel' || type === 'url');
@@ -35,11 +38,8 @@ namespace AlpineLite{
             else if (element.tagName === 'TEXTAREA'){
                 isText = true;
             }
-            else if (element.tagName === 'FORM'){
-                isForm = true;
-            }
             else if (element.tagName !== 'SELECT'){
-                return HandlerReturn.Nil;
+                isUnknown = true;
             }
             
             let options = Evaluator.Evaluate(directive.value, state, element);
@@ -66,53 +66,23 @@ namespace AlpineLite{
             }
 
             let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
-            map['dirty'] = () => {
-                return 'alpine.input.dirty';
-            };
+            map['dirty'] = () => InputDirtyEvent;
+            map['input.dirty'] = () => InputDirtyEvent;
 
-            map['input.dirty'] = () => {
-                return 'alpine.input.dirty';
-            };
+            map['clean'] = () => InputCleanEvent;
+            map['input.clean'] = () => InputCleanEvent;
 
-            map['clean'] = () => {
-                return 'alpine.input.clean';
-            };
+            map['typing'] = () => InputTypingEvent;
+            map['input.typing'] = () => InputTypingEvent;
 
-            map['input.clean'] = () => {
-                return 'alpine.input.clean';
-            };
+            map['stopped.typing'] = () => InputStoppedTypingEvent;
+            map['input.stopped.typing'] = () => InputStoppedTypingEvent;
 
-            map['typing'] = () => {
-                return 'alpine.input.typing';
-            };
+            map['valid'] = () => InputValidEvent;
+            map['input.valid'] = () => InputValidEvent;
 
-            map['input.typing'] = () => {
-                return 'alpine.input.typing';
-            };
-
-            map['stopped.typing'] = () => {
-                return 'alpine.input.stopped.typing';
-            };
-
-            map['input.stopped.typing'] = () => {
-                return 'alpine.input.stopped.typing';
-            };
-
-            map['valid'] = () => {
-                return 'alpine.input.valid';
-            };
-
-            map['input.valid'] = () => {
-                return 'alpine.input.valid';
-            };
-
-            map['invalid'] = () => {
-                return 'alpine.input.invalid';
-            };
-
-            map['input.invalid'] = () => {
-                return 'alpine.input.invalid';
-            };
+            map['invalid'] = () => InputInvalidEvent;
+            map['input.invalid'] = () => InputInvalidEvent;
             
             let locals: {
                 raw: any;
@@ -150,87 +120,77 @@ namespace AlpineLite{
             });
 
             locals.raw['$resetDirtyEvent'] = new Value(() => {
-                return new Event('alpine.input.reset.dirty');
+                return new Event('alpinelite.input.reset.dirty');
             });
 
-            if (isForm){
+            if (isUnknown){
                 let inputs = element.querySelectorAll('input');
                 let textAreas = element.querySelectorAll('textarea');
                 let selects = element.querySelectorAll('select');
                 
-                let totalCount = (inputs.length + textAreas.length + selects.length), dirtyCount = 0, typingCount = 0, validCount = 0;
-                element.addEventListener(InputDirtyEvent.type, (event: Event) => {
-                    if (++dirtyCount == 1){
-                        callbackInfo.isDirty = true;
-                    }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
-
-                element.addEventListener(InputCleanEvent.type, (event: Event) => {
-                    if (--dirtyCount == 0){
-                        callbackInfo.isDirty = false;
-                    }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
-
-                element.addEventListener(InputResetDirtyEvent.type, (event: Event) => {
+                element.addEventListener(InputResetDirtyEvent, (event: Event) => {
                     if (event.target !== element){//Bubbled
                         return;
                     }
                     
                     inputs.forEach((elem: HTMLInputElement) => {
-                        elem.dispatchEvent(InputResetDirtyEvent);
+                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
                     });
 
                     textAreas.forEach((elem: HTMLTextAreaElement) => {
-                        elem.dispatchEvent(InputResetDirtyEvent);
+                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
                     });
 
                     selects.forEach((elem: HTMLSelectElement) => {
-                        elem.dispatchEvent(InputResetDirtyEvent);
+                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
                     });
                 });
                 
-                element.addEventListener(InputTypingEvent.type, (event: Event) => {
+                let totalCount = (inputs.length + textAreas.length + selects.length), dirtyCount = 0, typingCount = 0, validCount = 0;
+                let eventHandlers = new Map<string, (event: Event) => void>();
+
+                eventHandlers[InputDirtyEvent] = (event: Event) => {
+                    if (++dirtyCount == 1){
+                        callbackInfo.isDirty = true;
+                        element.dispatchEvent(new Event(InputDirtyEvent));
+                    }
+                };
+                
+                eventHandlers[InputCleanEvent] = (event: Event) => {
+                    if (--dirtyCount == 0){
+                        callbackInfo.isDirty = false;
+                        element.dispatchEvent(new Event(InputCleanEvent));
+                    }
+                };
+                
+                eventHandlers[InputTypingEvent] = (event: Event) => {
                     if (++typingCount == 1){
                         callbackInfo.isTyping = true;
+                        element.dispatchEvent(new Event(InputTypingEvent));
                     }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
-
-                element.addEventListener(InputStoppedTypingEvent.type, (event: Event) => {
+                };
+                
+                eventHandlers[InputStoppedTypingEvent] = (event: Event) => {
                     if (--typingCount == 0){
                         callbackInfo.isTyping = false;
+                        element.dispatchEvent(new Event(InputStoppedTypingEvent));
                     }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
-
-                element.addEventListener(InputValidEvent.type, (event: Event) => {
+                };
+                
+                eventHandlers[InputValidEvent] = (event: Event) => {
                     if (++validCount == totalCount){
                         callbackInfo.isValid = true;
+                        element.dispatchEvent(new Event(InputValidEvent));
                     }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
-
-                element.addEventListener(InputInvalidEvent.type, (event: Event) => {
+                };
+                
+                eventHandlers[InputInvalidEvent] = (event: Event) => {
                     --validCount;
                     if (callbackInfo.isValid){
                         callbackInfo.isValid = false;
+                        element.dispatchEvent(new Event(InputInvalidEvent));
                     }
-                    else{
-                        event.stopImmediatePropagation();
-                    }
-                });
+                };
                 
                 let childOptions = JSON.stringify({
                     stoppedDelay: stoppedDelay,
@@ -238,6 +198,10 @@ namespace AlpineLite{
                 });
                 
                 inputs.forEach((elem: HTMLInputElement) => {
+                    for (let event in eventHandlers){
+                        elem.addEventListener(event, eventHandlers[event]);
+                    }
+                    
                     ExtendedHandler.State({
                         original: null,
                         parts: null,
@@ -252,6 +216,10 @@ namespace AlpineLite{
                 });
 
                 textAreas.forEach((elem: HTMLTextAreaElement) => {
+                    for (let event in eventHandlers){
+                        elem.addEventListener(event, eventHandlers[event]);
+                    }
+                    
                     ExtendedHandler.State({
                         original: null,
                         parts: null,
@@ -266,6 +234,10 @@ namespace AlpineLite{
                 });
 
                 selects.forEach((elem: HTMLSelectElement) => {
+                    for (let event in eventHandlers){
+                        elem.addEventListener(event, eventHandlers[event]);
+                    }
+                    
                     ExtendedHandler.State({
                         original: null,
                         parts: null,
@@ -292,33 +264,33 @@ namespace AlpineLite{
 
                     if (isText && callbackInfo.isTyping){
                         callbackInfo.isTyping = false;
-                        element.dispatchEvent(InputStoppedTypingEvent);
+                        element.dispatchEvent(new Event(InputStoppedTypingEvent));
                     }
 
                     let isValid = (element as HTMLInputElement).checkValidity();
                     if (isValid != callbackInfo.isValid){
                         callbackInfo.isValid = isValid;
                         if (!callbackInfo.activeValidCheck){
-                            element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                            element.dispatchEvent(new Event(isValid ? InputValidEvent : InputInvalidEvent));
                         }
                     }
                 }, stoppedDelay);
 
                 if (isText && !callbackInfo.isTyping){
                     callbackInfo.isTyping = true;
-                    element.dispatchEvent(InputTypingEvent);
+                    element.dispatchEvent(new Event(InputTypingEvent));
                 }
 
                 if (!callbackInfo.isDirty){
                     callbackInfo.isDirty = true;
-                    element.dispatchEvent(InputDirtyEvent);
+                    element.dispatchEvent(new Event(InputDirtyEvent));
                 }
 
                 if (callbackInfo.activeValidCheck){
                     let isValid = (element as HTMLInputElement).checkValidity();
                     if (isValid != callbackInfo.isValid){
                         callbackInfo.isValid = isValid;
-                        element.dispatchEvent(isValid ? InputValidEvent : InputInvalidEvent);
+                        element.dispatchEvent(new Event(isValid ? InputValidEvent : InputInvalidEvent));
                     }
                 }
             };
@@ -332,10 +304,10 @@ namespace AlpineLite{
                 element.addEventListener('change', eventCallback);
             }
 
-            element.addEventListener(InputResetDirtyEvent.type, (event: Event) => {
+            element.addEventListener(InputResetDirtyEvent, (event: Event) => {
                 if (callbackInfo.isDirty){
                     callbackInfo.isDirty = false;
-                    element.dispatchEvent(InputCleanEvent);
+                    element.dispatchEvent(new Event(InputCleanEvent));
                 }
             });
             
@@ -343,6 +315,19 @@ namespace AlpineLite{
         }
 
         public static Observe(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+
+            map['unsupported'] = () => ObservedUnsupportedEvent;
+            map['observed.unsupported'] = () => ObservedUnsupportedEvent;
+            
+            if (!('IntersectionObserver' in window)){
+                setTimeout(() => {
+                    element.dispatchEvent(new Event(ObservedUnsupportedEvent));
+                }, 0);
+
+                return;
+            }
+            
             let options = Evaluator.Evaluate(directive.value, state, element);
             if (typeof options === 'function'){
                 options = (options as () => void).call(state.GetValueContext());
@@ -371,58 +356,37 @@ namespace AlpineLite{
                 }
             }
 
-            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
-            map['increment'] = () => {
-                return 'alpine.observed.increment';
-            };
+            map['increment'] = () => ObservedIncrementEvent;
+            map['observed.increment'] = () => ObservedIncrementEvent;
 
-            map['observed.increment'] = () => {
-                return 'alpine.observed.increment';
-            };
+            map['decrement'] = () => ObservedDecrementEvent;
+            map['observed.decrement'] = () => ObservedDecrementEvent;
 
-            map['decrement'] = () => {
-                return 'alpine.observed.decrement';
-            };
+            map['visible'] = () => ObservedVisibleEvent;
+            map['observed.visible'] = () => ObservedVisibleEvent;
 
-            map['observed.decrement'] = () => {
-                return 'alpine.observed.decrement';
-            };
-
-            map['visible'] = () => {
-                return 'alpine.observed.visible';
-            };
-
-            map['observed.visible'] = () => {
-                return 'alpine.observed.visible';
-            };
-
-            map['hidden'] = () => {
-                return 'alpine.observed.hidden';
-            };
-
-            map['observed.hidden'] = () => {
-                return 'alpine.observed.hidden';
-            };
+            map['hidden'] = () => ObservedHiddenEvent;
+            map['observed.hidden'] = () => ObservedHiddenEvent;
 
             let previousRatio = 0;
             let observer = new IntersectionObserver((entries: IntersectionObserverEntry[]) => {
                 entries.forEach((entry: IntersectionObserverEntry) => {
                     let isIntersecting = (!('isIntersecting' in entry) ? (0 < (entry as IntersectionObserverEntry).intersectionRatio) : entry.isIntersecting);
                     if (!isIntersecting){//Hidden
-                        element.dispatchEvent(ObservedDecrementEvent);
-                        element.dispatchEvent(ObservedHidden);
+                        element.dispatchEvent(new Event(ObservedDecrementEvent));
+                        element.dispatchEvent(new Event(ObservedHiddenEvent));
                         previousRatio = 0;
                     }
                     else if (previousRatio < entry.intersectionRatio){//Increment
                         if (previousRatio == 0){//Visible
-                            element.dispatchEvent(ObservedVisible);
+                            element.dispatchEvent(new Event(ObservedVisibleEvent));
                         }
 
-                        element.dispatchEvent(ObservedIncrementEvent);
+                        element.dispatchEvent(new Event(ObservedIncrementEvent));
                         previousRatio = entry.intersectionRatio;
                     }
                     else{//Decrement
-                        element.dispatchEvent(ObservedDecrementEvent);
+                        element.dispatchEvent(new Event(ObservedDecrementEvent));
                         previousRatio = entry.intersectionRatio;
                     }
                 });
@@ -458,18 +422,17 @@ namespace AlpineLite{
                 options['threshold'] = 0.5;
             }
 
-            element.addEventListener(ObservedVisible.type, (event: Event) => {
-                if (element.tagName !== 'IMG'){
-                    fetch(options['url'])
-                    .then((response) => response.text())
-                    .then((data) => {
-                        element.innerHTML = data;
-                    });
-                }
-                else{
-                    (element as HTMLImageElement).src = options['url'];
-                }
-            });
+            let handler = (event: Event) => {
+                ExtendedHandler.FetchLoad(element, options['url']);
+                element.removeEventListener(ObservedVisibleEvent, handler);
+            };
+
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['loaded'] = () => LazyLoadedEvent;
+            map['lazy.loaded'] = () => LazyLoadedEvent;
+            
+            element.addEventListener(ObservedVisibleEvent, handler);
+            element.addEventListener(ObservedUnsupportedEvent, handler);
 
             ExtendedHandler.Observe({
                 original: null,
@@ -482,10 +445,63 @@ namespace AlpineLite{
             return HandlerReturn.Handled;
         }
 
+        public static ConditionalLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            let options = Evaluator.Evaluate(directive.value, state, element);
+            if (typeof options === 'function'){
+                options = (options as () => void).call(state.GetValueContext());
+            }
+
+            if (!options || typeof options !== 'object' || !('condition' in options) || !('url' in options)){
+                return HandlerReturn.Nil;
+            }
+
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['loaded'] = () => LazyLoadedEvent;
+            map['lazy.loaded'] = () => LazyLoadedEvent;
+
+            let condition = options['condition'];
+            if (typeof condition === 'string'){
+                Proxy.Watch(condition, element, state, (value: any): boolean => {//Once
+                    if (!value){
+                        return true;
+                    }
+    
+                    ExtendedHandler.FetchLoad(element, options['url']);
+                    return false;
+                });
+            }
+            else if (condition){
+                ExtendedHandler.FetchLoad(element, options['url']);
+            }
+            
+            return HandlerReturn.Nil;
+        }
+
+        public static FetchLoad(element: HTMLElement, url: string): void{
+            if (element.tagName === 'IMG' || element.tagName === 'IFRAME'){
+                let loadHandler = (event: Event) => {
+                    element.removeEventListener('load', loadHandler);
+                    element.dispatchEvent(new Event(LazyLoadedEvent));
+                };
+
+                element.addEventListener('load', loadHandler);
+                (element as HTMLImageElement).src = url;
+            }
+            else{
+                fetch(url)
+                .then((response) => response.text())
+                .then((data) => {
+                    element.innerHTML = data;
+                    element.dispatchEvent(new Event(LazyLoadedEvent));
+                });
+            }
+        }
+
         public static AddAll(){
             Handler.AddDirectiveHandler('state', ExtendedHandler.State);
             Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
             Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
+            Handler.AddDirectiveHandler('conditionalLoad', ExtendedHandler.ConditionalLoad);
         }
     }
 

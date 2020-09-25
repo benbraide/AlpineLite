@@ -628,7 +628,7 @@ var AlpineLite;
         static GetBaseValue(target) {
             target = Proxy.GetNonProxy(target);
             if (!target || typeof target !== 'object') {
-                return null;
+                return target;
             }
             return (('__AlpineLiteTarget__' in target) ? target['__AlpineLiteTarget__'] : target);
         }
@@ -722,38 +722,6 @@ var AlpineLite;
                 };
                 return localsProxy.GetProxy();
             };
-            let watch = (target, proxy, callback) => {
-                let stoppedWatching = false;
-                let previousValue = null;
-                let contextElement = proxy.GetContextElement();
-                let key = proxy.details_.state.GetElementId(contextElement);
-                if (key !== '') {
-                    key += '_watch';
-                }
-                proxy.details_.state.TrapGetAccess((change) => {
-                    previousValue = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
-                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(previousValue));
-                    stoppedWatching = !callback(previousValue);
-                }, (change) => {
-                    if (stoppedWatching) {
-                        if (key !== '') {
-                            proxy.details_.state.GetChanges().RemoveListeners(key);
-                            key = '';
-                        }
-                        return;
-                    }
-                    let value = Evaluator.Evaluate(target, proxy.details_.state, contextElement);
-                    if (proxy.details_.state.IsEqual(value, previousValue)) {
-                        return;
-                    }
-                    if (key !== '') {
-                        proxy.details_.state.GetChanges().RemoveListeners(key);
-                        key = '';
-                    }
-                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(value));
-                    stoppedWatching = !callback(value);
-                }, null, key);
-            };
             let getProp = (prop, target, proxy) => {
                 if (typeof target !== 'object' || !(prop in target)) {
                     return null;
@@ -829,7 +797,7 @@ var AlpineLite;
                 if (!info) {
                     return;
                 }
-                watch(info[1], info[0], (value) => {
+                Proxy.Watch(info[1], info[0].GetContextElement(), info[0].details_.state, (value) => {
                     let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
                     if (!targetInfo) {
                         return false;
@@ -844,7 +812,7 @@ var AlpineLite;
                 if (!targetInfo) {
                     return;
                 }
-                watch(targetInfo[1], targetInfo[0], (value) => {
+                Proxy.Watch(targetInfo[1], targetInfo[0].GetContextElement(), targetInfo[0].details_.state, (value) => {
                     let sourceInfo = reduce(componentRef.proxy_, prop.split('.'), componentRef);
                     if (!sourceInfo) {
                         return false;
@@ -1005,7 +973,7 @@ var AlpineLite;
             addRootKey('watch', (proxy) => {
                 return (target, callback) => {
                     let isInitial = true;
-                    watch(target, proxy, (value) => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value) => {
                         if (isInitial) {
                             isInitial = false;
                             return true;
@@ -1016,14 +984,14 @@ var AlpineLite;
             });
             addRootKey('when', (proxy) => {
                 return (target, callback) => {
-                    watch(target, proxy, (value) => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value) => {
                         return (!value || callback.call(proxy.GetProxy(), value) !== false);
                     });
                 };
             });
             addRootKey('once', (proxy) => {
                 return (target, callback) => {
-                    watch(target, proxy, (value) => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value) => {
                         if (!value) {
                             return true;
                         }
@@ -1032,6 +1000,37 @@ var AlpineLite;
                     });
                 };
             });
+        }
+        static Watch(target, element, state, callback) {
+            let stoppedWatching = false;
+            let previousValue = null;
+            let key = state.GetElementId(element);
+            if (key !== '') {
+                key += '_watch';
+            }
+            state.TrapGetAccess((change) => {
+                previousValue = Evaluator.Evaluate(target, state, element);
+                previousValue = state.DeepCopy(Proxy.GetBaseValue(previousValue));
+                stoppedWatching = !callback(previousValue);
+            }, (change) => {
+                if (stoppedWatching) {
+                    if (key !== '') {
+                        state.GetChanges().RemoveListeners(key);
+                        key = '';
+                    }
+                    return;
+                }
+                let value = Evaluator.Evaluate(target, state, element);
+                if (state.IsEqual(value, previousValue)) {
+                    return;
+                }
+                if (key !== '') {
+                    state.GetChanges().RemoveListeners(key);
+                    key = '';
+                }
+                previousValue = state.DeepCopy(Proxy.GetBaseValue(value));
+                stoppedWatching = !callback(value);
+            }, null, key);
         }
         static GetExternalSpecialKey() {
             return '__AlpineLiteSpecial__';

@@ -97,7 +97,7 @@
             </div>
             <div style="background-color: red; height: 100px;" x-data="{width: 100}" x-style-width="`${width}px`" x-class="{cyan: (width == 200)}" x-click="width = 200 - width + 100"></div>
         </div>
-        <img src="" alt="" style="height: 150px; width: 150px; margin-top: 500px;" x-data x-lazy-load="'https://lorempixel.com/580/250/nature/4'">
+        <img src="" alt="" style="height: 150px; width: 150px; margin-top: 500px;" x-data x-lazy-load="'/soup.JPG'" x-on-loaded="$console.log('Image loaded')">
     </div>
     <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-on-visible="$console.log('Visible')" x-on-hidden="$console.log('Hidden')"></div>
     <script src="./dist/Bundle.js"></script>

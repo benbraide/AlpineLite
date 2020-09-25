@@ -440,7 +440,7 @@ export namespace AlpineLite{
         public static GetBaseValue(target: any): any{
             target = Proxy.GetNonProxy(target);
             if (!target || typeof target !== 'object'){
-                return null;
+                return target;
             }
 
             return (('__AlpineLiteTarget__' in target) ? target['__AlpineLiteTarget__'] : target);
@@ -560,46 +560,6 @@ export namespace AlpineLite{
                 return localsProxy.GetProxy();
             };
 
-            let watch = (target: string, proxy: Proxy, callback: (value: any) => boolean) => {
-                let stoppedWatching = false;
-                let previousValue: any = null;
-
-                let contextElement = proxy.GetContextElement();
-                let key = proxy.details_.state.GetElementId(contextElement);
-
-                if (key !== ''){
-                    key += '_watch';
-                }
-                
-                proxy.details_.state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                    previousValue = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
-                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(previousValue));
-                    stoppedWatching = !callback(previousValue);
-                }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                    if (stoppedWatching){
-                        if (key !== ''){
-                            proxy.details_.state.GetChanges().RemoveListeners(key);
-                            key = '';
-                        }
-
-                        return;
-                    }
-                    
-                    let value = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, proxy.details_.state, contextElement);
-                    if (proxy.details_.state.IsEqual(value, previousValue)){
-                        return;
-                    }
-                    
-                    if (key !== ''){
-                        proxy.details_.state.GetChanges().RemoveListeners(key);
-                        key = '';
-                    }
-                    
-                    previousValue = proxy.details_.state.DeepCopy(Proxy.GetBaseValue(value));
-                    stoppedWatching = !callback(value);
-                }, null, key);
-            };
-
             let getProp = (prop: string, target: any, proxy: Proxy): [Proxy, any] => {
                 if (typeof target !== 'object' || !(prop in target)){
                     return null;
@@ -694,7 +654,7 @@ export namespace AlpineLite{
                     return;
                 }
 
-                watch(info[1], info[0], (value: any): boolean => {
+                Proxy.Watch(info[1], info[0].GetContextElement(), info[0].details_.state, (value: any): boolean => {
                     let targetInfo = reduce(proxy.proxy_, name.split('.'), proxy);
                     if (!targetInfo){
                         return false;
@@ -713,7 +673,7 @@ export namespace AlpineLite{
                     return;
                 }
 
-                watch(targetInfo[1], targetInfo[0], (value: any): boolean => {
+                Proxy.Watch(targetInfo[1], targetInfo[0].GetContextElement(), targetInfo[0].details_.state, (value: any): boolean => {
                     let sourceInfo = reduce(componentRef.proxy_, prop.split('.'), componentRef);
                     if (!sourceInfo){
                         return false;
@@ -909,7 +869,7 @@ export namespace AlpineLite{
             addRootKey('watch', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
                     let isInitial = true;
-                    watch(target, proxy, (value: any): boolean => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value: any): boolean => {
                         if (isInitial){
                             isInitial = false;
                             return true;
@@ -922,7 +882,7 @@ export namespace AlpineLite{
 
             addRootKey('when', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
-                    watch(target, proxy, (value: any): boolean => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value: any): boolean => {
                         return (!value || callback.call(proxy.GetProxy(), value) !== false);
                     });
                 };
@@ -930,7 +890,7 @@ export namespace AlpineLite{
 
             addRootKey('once', (proxy: Proxy): any => {
                 return (target: string, callback: (value: any) => {}) => {
-                    watch(target, proxy, (value: any): boolean => {
+                    Proxy.Watch(target, proxy.GetContextElement(), proxy.details_.state, (value: any): boolean => {
                         if (!value){
                             return true;
                         }
@@ -940,6 +900,44 @@ export namespace AlpineLite{
                     });
                 };
             });
+        }
+
+        public static Watch(target: string, element: HTMLElement, state: StateScope.AlpineLite.State, callback: (value: any) => boolean){
+            let stoppedWatching = false;
+            let previousValue: any = null;
+
+            let key = state.GetElementId(element);
+            if (key !== ''){
+                key += '_watch';
+            }
+            
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                previousValue = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, state, element);
+                previousValue = state.DeepCopy(Proxy.GetBaseValue(previousValue));
+                stoppedWatching = !callback(previousValue);
+            }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                if (stoppedWatching){
+                    if (key !== ''){
+                        state.GetChanges().RemoveListeners(key);
+                        key = '';
+                    }
+
+                    return;
+                }
+                
+                let value = EvaluatorScope.AlpineLite.Evaluator.Evaluate(target, state, element);
+                if (state.IsEqual(value, previousValue)){
+                    return;
+                }
+                
+                if (key !== ''){
+                    state.GetChanges().RemoveListeners(key);
+                    key = '';
+                }
+                
+                previousValue = state.DeepCopy(Proxy.GetBaseValue(value));
+                stoppedWatching = !callback(value);
+            }, null, key);
         }
 
         public static GetExternalSpecialKey(): string{
