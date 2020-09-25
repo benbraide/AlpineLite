@@ -474,10 +474,78 @@ namespace AlpineLite{
                 ExtendedHandler.FetchLoad(element, options['url']);
             }
             
-            return HandlerReturn.Nil;
+            return HandlerReturn.Handled;
+        }
+
+        public static XHRLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            let map = (element[CoreBulkHandler.GetEventExpansionKey()] = (element[CoreBulkHandler.GetEventExpansionKey()] || {}));
+            
+            map['loaded'] = () => LazyLoadedEvent;
+            map['lazy.loaded'] = () => LazyLoadedEvent;
+
+            state.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                let url = Evaluator.Evaluate(directive.value, state, element);
+                if (typeof url === 'function'){//Call function
+                    url = (url as () => any).call(state.GetValueContext());
+                }
+
+                ExtendedHandler.FetchLoad(element, url);
+            }, true);
+            
+            return HandlerReturn.Handled;
+        }
+
+        public static AttrChange(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            if (directive.key !== 'attrChange'){
+                return HandlerReturn.Nil;
+            }
+
+            let locals: {
+                raw: any;
+                proxy: Proxy;
+            };
+
+            let proxyKey = Proxy.GetProxyKey(), attrName: string = null;
+            if (!(proxyKey in element)){
+                let raw = {};
+                let localProxy = Proxy.Create({
+                    target: raw,
+                    name: state.GetElementId(element),
+                    parent: null,
+                    element: element,
+                    state: state
+                });
+
+                element[proxyKey] = {
+                    raw: raw,
+                    proxy: localProxy
+                };
+            }
+            
+            locals = element[proxyKey];
+            locals.raw['$attr'] = new Value(() => {
+                return attrName;
+            });
+
+            let listeners = (element[Handler.GetAttributeChangeKey()] = (element[Handler.GetAttributeChangeKey()] || []));
+            listeners.push((attr: string) => {
+                attrName = attr;
+                
+                let result = Evaluator.Evaluate(directive.value, state, element);
+                if (typeof result === 'function'){//Call function
+                    (result as (name: string) => any).call(state.GetValueContext(), attr);
+                }
+            });
+            
+            return HandlerReturn.Handled;
         }
 
         public static FetchLoad(element: HTMLElement, url: string): void{
+            url = url.trim();
+            if (!url){
+                return;
+            }
+            
             if (element.tagName === 'IMG' || element.tagName === 'IFRAME'){
                 let loadHandler = (event: Event) => {
                     element.removeEventListener('load', loadHandler);
@@ -502,6 +570,8 @@ namespace AlpineLite{
             Handler.AddDirectiveHandler('observe', ExtendedHandler.Observe);
             Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
             Handler.AddDirectiveHandler('conditionalLoad', ExtendedHandler.ConditionalLoad);
+            Handler.AddDirectiveHandler('xhrLoad', ExtendedHandler.XHRLoad);
+            Handler.AddDirectiveHandler('attrChange', ExtendedHandler.AttrChange);
         }
     }
 

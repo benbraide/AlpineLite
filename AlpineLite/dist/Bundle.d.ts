@@ -12,14 +12,14 @@ declare namespace AlpineLite {
         constructor(callback: (valueContext?: any, elementContext?: HTMLElement) => any);
         Get(valueContext?: any, elementContext?: HTMLElement): any;
     }
-    interface IChange {
+    export interface IChange {
         type: string;
         name: string;
         path: string;
         exists: boolean;
         value: any;
     }
-    interface IBubbledChange {
+    export interface IBubbledChange {
         original: IChange;
         name: string;
         path: string;
@@ -178,6 +178,7 @@ declare namespace AlpineLite {
         static AddBulkDirectiveHandlerInFront(handler: DirectiveHandler): void;
         static HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static GetExternalHandlerKey(): string;
+        static GetAttributeChangeKey(): string;
     }
     interface ProcessorOptions {
         checkTemplate?: boolean;

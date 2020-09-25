@@ -1157,6 +1157,19 @@ var AlpineLite;
             this.bulkDirectiveHandlers_.unshift(handler);
         }
         static HandleDirective(directive, element, state) {
+            if (directive.key in this.directiveHandlers_) { //Call handler
+                let result = this.directiveHandlers_[directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil) {
+                    return result;
+                }
+            }
+            let key = Handler.GetExternalHandlerKey();
+            if ((key in element) && directive.key in element[key]) {
+                let result = element[key][directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil) {
+                    return result;
+                }
+            }
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i) {
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
                 if (result == HandlerReturn.SkipBulk) {
@@ -1166,20 +1179,13 @@ var AlpineLite;
                     return result;
                 }
             }
-            if (directive.key in this.directiveHandlers_) { //Call handler
-                let result = this.directiveHandlers_[directive.key](directive, element, state);
-                if (result != HandlerReturn.Nil) {
-                    return result;
-                }
-            }
-            let key = Handler.GetExternalHandlerKey();
-            if ((key in element) && directive.key in element[key]) {
-                return element[key][directive.key](directive, element, state);
-            }
             return HandlerReturn.Nil;
         }
         static GetExternalHandlerKey() {
             return '__AlpineLiteHandler__';
+        }
+        static GetAttributeChangeKey() {
+            return '__AlpineLiteAttributeChange__';
         }
     }
     Handler.directiveHandlers_ = new Map();
@@ -1886,29 +1892,39 @@ var AlpineLite;
                     let processor = new Processor(state);
                     let observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
-                            mutation.removedNodes.forEach((node) => {
-                                if ((node === null || node === void 0 ? void 0 : node.nodeType) !== 1) {
-                                    return;
-                                }
-                                this.dataRegions_.forEach((region) => {
-                                    region.state.GetChanges().RemoveListeners(node);
+                            if (mutation.type === 'childList') {
+                                mutation.removedNodes.forEach((node) => {
+                                    if ((node === null || node === void 0 ? void 0 : node.nodeType) !== 1) {
+                                        return;
+                                    }
+                                    this.dataRegions_.forEach((region) => {
+                                        region.state.GetChanges().RemoveListeners(node);
+                                    });
+                                    let uninitKey = CoreHandler.GetUninitKey();
+                                    if (uninitKey in node) { //Execute uninit callback
+                                        node[uninitKey]();
+                                        delete node[uninitKey];
+                                    }
+                                    CoreBulkHandler.RemoveOutsideEventHandlers(node);
                                 });
-                                let uninitKey = CoreHandler.GetUninitKey();
-                                if (uninitKey in node) { //Execute uninit callback
-                                    node[uninitKey]();
-                                    delete node[uninitKey];
-                                }
-                                CoreBulkHandler.RemoveOutsideEventHandlers(node);
-                            });
-                            mutation.addedNodes.forEach((node) => {
-                                if ((node === null || node === void 0 ? void 0 : node.nodeType) !== 1) {
-                                    return;
-                                }
-                                processor.All(node, {
-                                    checkTemplate: true,
-                                    checkDocument: false
+                                mutation.addedNodes.forEach((node) => {
+                                    if ((node === null || node === void 0 ? void 0 : node.nodeType) !== 1) {
+                                        return;
+                                    }
+                                    processor.All(node, {
+                                        checkTemplate: true,
+                                        checkDocument: false
+                                    });
                                 });
-                            });
+                            }
+                            else if (mutation.type === 'attributes') {
+                                let attrChangeKey = Handler.GetAttributeChangeKey();
+                                if (attrChangeKey in mutation.target) {
+                                    mutation.target[attrChangeKey].forEach((callback) => {
+                                        callback(mutation.attributeName);
+                                    });
+                                }
+                            }
                         });
                     });
                     state.PushValueContext(proxyData.GetProxy());
@@ -1923,6 +1939,7 @@ var AlpineLite;
                     observer.observe(element, {
                         childList: true,
                         subtree: true,
+                        attributes: true,
                         characterData: false,
                     });
                 });

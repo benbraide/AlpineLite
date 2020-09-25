@@ -39,6 +39,21 @@ export namespace AlpineLite{
         }
 
         public static HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerReturn{
+            if (directive.key in this.directiveHandlers_){//Call handler
+                let result = this.directiveHandlers_[directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
+            }
+            
+            let key = Handler.GetExternalHandlerKey();
+            if ((key in element) && directive.key in element[key]){
+                let result = (element[key][directive.key] as DirectiveHandler)(directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
+            }
+            
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
                 if (result == HandlerReturn.SkipBulk){
@@ -49,24 +64,16 @@ export namespace AlpineLite{
                     return result;
                 }
             }
-
-            if (directive.key in this.directiveHandlers_){//Call handler
-                let result = this.directiveHandlers_[directive.key](directive, element, state);
-                if (result != HandlerReturn.Nil){
-                    return result;
-                }
-            }
             
-            let key = Handler.GetExternalHandlerKey();
-            if ((key in element) && directive.key in element[key]){
-                return (element[key][directive.key] as DirectiveHandler)(directive, element, state);
-            }
-
             return HandlerReturn.Nil;
         }
 
         public static GetExternalHandlerKey(): string{
             return '__AlpineLiteHandler__';
+        }
+
+        public static GetAttributeChangeKey(): string{
+            return '__AlpineLiteAttributeChange__';
         }
     }
 }

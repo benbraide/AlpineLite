@@ -36,7 +36,7 @@ namespace AlpineLite{
     }
     
     //Changes interfaces
-    interface IChange{
+    export interface IChange{
         type: string;
         name: string;
         path: string;
@@ -44,7 +44,7 @@ namespace AlpineLite{
         value: any;
     }
 
-    interface IBubbledChange{
+    export interface IBubbledChange{
         original: IChange;
         name: string;
         path: string;
@@ -1472,6 +1472,21 @@ namespace AlpineLite{
         }
 
         public static HandleDirective(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            if (directive.key in this.directiveHandlers_){//Call handler
+                let result = this.directiveHandlers_[directive.key](directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
+            }
+            
+            let key = Handler.GetExternalHandlerKey();
+            if ((key in element) && directive.key in element[key]){
+                let result = (element[key][directive.key] as DirectiveHandler)(directive, element, state);
+                if (result != HandlerReturn.Nil){
+                    return result;
+                }
+            }
+            
             for (let i = 0; i < this.bulkDirectiveHandlers_.length; ++i){
                 let result = this.bulkDirectiveHandlers_[i](directive, element, state);
                 if (result == HandlerReturn.SkipBulk){
@@ -1482,24 +1497,16 @@ namespace AlpineLite{
                     return result;
                 }
             }
-
-            if (directive.key in this.directiveHandlers_){//Call handler
-                let result = this.directiveHandlers_[directive.key](directive, element, state);
-                if (result != HandlerReturn.Nil){
-                    return result;
-                }
-            }
-            
-            let key = Handler.GetExternalHandlerKey();
-            if ((key in element) && directive.key in element[key]){
-                return (element[key][directive.key] as DirectiveHandler)(directive, element, state);
-            }
             
             return HandlerReturn.Nil;
         }
 
         public static GetExternalHandlerKey(): string{
             return '__AlpineLiteHandler__';
+        }
+
+        public static GetAttributeChangeKey(): string{
+            return '__AlpineLiteAttributeChange__';
         }
     }
 
@@ -2366,34 +2373,44 @@ namespace AlpineLite{
                     let processor = new Processor(state);
                     let observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
-                            mutation.removedNodes.forEach((node: Node) => {
-                                if (node?.nodeType !== 1){
-                                    return;
-                                }
-
-                                this.dataRegions_.forEach((region: DataRegion) => {
-                                    region.state.GetChanges().RemoveListeners(node as HTMLElement);
+                            if (mutation.type === 'childList'){
+                                mutation.removedNodes.forEach((node: Node) => {
+                                    if (node?.nodeType !== 1){
+                                        return;
+                                    }
+    
+                                    this.dataRegions_.forEach((region: DataRegion) => {
+                                        region.state.GetChanges().RemoveListeners(node as HTMLElement);
+                                    });
+                                    
+                                    let uninitKey = CoreHandler.GetUninitKey();
+                                    if (uninitKey in node){//Execute uninit callback
+                                        (node[uninitKey] as () => void)();
+                                        delete node[uninitKey];
+                                    }
+    
+                                    CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
                                 });
-                                
-                                let uninitKey = CoreHandler.GetUninitKey();
-                                if (uninitKey in node){//Execute uninit callback
-                                    (node[uninitKey] as () => void)();
-                                    delete node[uninitKey];
-                                }
-
-                                CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
-                            });
-
-                            mutation.addedNodes.forEach((node: Node) => {
-                                if (node?.nodeType !== 1){
-                                    return;
-                                }
-
-                                processor.All((node as HTMLElement), {
-                                    checkTemplate: true,
-                                    checkDocument: false
+    
+                                mutation.addedNodes.forEach((node: Node) => {
+                                    if (node?.nodeType !== 1){
+                                        return;
+                                    }
+    
+                                    processor.All((node as HTMLElement), {
+                                        checkTemplate: true,
+                                        checkDocument: false
+                                    });
                                 });
-                            });
+                            }
+                            else if (mutation.type === 'attributes'){
+                                let attrChangeKey = Handler.GetAttributeChangeKey();
+                                if (attrChangeKey in mutation.target){
+                                    (mutation.target[attrChangeKey] as Array<(attr: string) => void>).forEach((callback) => {
+                                        callback(mutation.attributeName);
+                                    });
+                                }
+                            }
                         });
                     });
                     
@@ -2410,6 +2427,7 @@ namespace AlpineLite{
                     observer.observe(element, {
                         childList: true,
                         subtree: true,
+                        attributes: true,
                         characterData: false,
                     });
                 });

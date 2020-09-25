@@ -61,34 +61,44 @@ export namespace AlpineLite{
                     let processor = new ProcessorScope.AlpineLite.Processor(state);
                     let observer = new MutationObserver((mutations) => {
                         mutations.forEach((mutation) => {
-                            mutation.removedNodes.forEach((node: Node) => {
-                                if (node?.nodeType !== 1){
-                                    return;
-                                }
-
-                                this.dataRegions_.forEach((region: DataRegion) => {
-                                    region.state.GetChanges().RemoveListeners(node as HTMLElement);
+                            if (mutation.type === 'childList'){
+                                mutation.removedNodes.forEach((node: Node) => {
+                                    if (node?.nodeType !== 1){
+                                        return;
+                                    }
+    
+                                    this.dataRegions_.forEach((region: DataRegion) => {
+                                        region.state.GetChanges().RemoveListeners(node as HTMLElement);
+                                    });
+                                    
+                                    let uninitKey = CoreHandlerScope.AlpineLite.CoreHandler.GetUninitKey();
+                                    if (uninitKey in node){//Execute uninit callback
+                                        (node[uninitKey] as () => void)();
+                                        delete node[uninitKey];
+                                    }
+    
+                                    CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
                                 });
-                                
-                                let uninitKey = CoreHandlerScope.AlpineLite.CoreHandler.GetUninitKey();
-                                if (uninitKey in node){//Execute uninit callback
-                                    (node[uninitKey] as () => void)();
-                                    delete node[uninitKey];
-                                }
-
-                                CoreBulkHandlerScope.AlpineLite.CoreBulkHandler.RemoveOutsideEventHandlers(node as HTMLElement);
-                            });
-
-                            mutation.addedNodes.forEach((node: Node) => {
-                                if (node?.nodeType !== 1){
-                                    return;
-                                }
-
-                                processor.All((node as HTMLElement), {
-                                    checkTemplate: true,
-                                    checkDocument: false
+    
+                                mutation.addedNodes.forEach((node: Node) => {
+                                    if (node?.nodeType !== 1){
+                                        return;
+                                    }
+    
+                                    processor.All((node as HTMLElement), {
+                                        checkTemplate: true,
+                                        checkDocument: false
+                                    });
                                 });
-                            });
+                            }
+                            else if (mutation.type === 'attributes'){
+                                let attrChangeKey = HandlerScope.AlpineLite.Handler.GetAttributeChangeKey();
+                                if (attrChangeKey in mutation.target){
+                                    (mutation.target[attrChangeKey] as Array<(attr: string) => void>).forEach((callback) => {
+                                        callback(mutation.attributeName);
+                                    });
+                                }
+                            }
                         });
                     });
                     
@@ -105,6 +115,7 @@ export namespace AlpineLite{
                     observer.observe(element, {
                         childList: true,
                         subtree: true,
+                        attributes: true,
                         characterData: false,
                     });
                 });

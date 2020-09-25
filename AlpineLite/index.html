@@ -91,7 +91,7 @@
                 <span>Email: </span>
                 <span x-text="email"></span>
             </div>
-            <div x-data="{added: 'This was added'}">
+            <div id="attrTarget" x-data="{added: 'This was added'}" x-attr-change="$console.log($attr)">
                 <span>Added: </span>
                 <span x-text="added"></span>
             </div>

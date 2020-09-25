@@ -5,6 +5,8 @@ declare namespace AlpineLite {
         static Observe(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static LazyLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static ConditionalLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
+        static XHRLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
+        static AttrChange(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static FetchLoad(element: HTMLElement, url: string): void;
         static AddAll(): void;
     }
