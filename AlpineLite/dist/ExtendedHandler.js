@@ -249,37 +249,12 @@ var AlpineLite;
         }
         static Observe(directive, element, state) {
             let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
-            map['unsupported'] = () => ObservedUnsupportedEvent;
-            map['observed.unsupported'] = () => ObservedUnsupportedEvent;
-            if (!('IntersectionObserver' in window)) {
-                setTimeout(() => {
-                    element.dispatchEvent(new Event(ObservedUnsupportedEvent));
-                }, 0);
-                return;
-            }
             let options = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
             if (typeof options === 'function') {
                 options = options.call(state.GetValueContext());
             }
-            let observerOptions = {
-                root: null,
-                rootMargin: '0px',
-                threshold: 0
-            };
-            if (options && typeof options === 'object') {
-                if ('root' in options) {
-                    observerOptions.root = options['root'];
-                    if (typeof observerOptions.root === 'string') {
-                        observerOptions.root = document.querySelector(observerOptions.root);
-                    }
-                }
-                if ('rootMargin' in options) {
-                    observerOptions.rootMargin = options['rootMargin'];
-                }
-                if ('threshold' in options) {
-                    observerOptions.threshold = options['threshold'];
-                }
-            }
+            map['unsupported'] = () => ObservedUnsupportedEvent;
+            map['observed.unsupported'] = () => ObservedUnsupportedEvent;
             map['increment'] = () => ObservedIncrementEvent;
             map['observed.increment'] = () => ObservedIncrementEvent;
             map['decrement'] = () => ObservedDecrementEvent;
@@ -289,8 +264,8 @@ var AlpineLite;
             map['hidden'] = () => ObservedHiddenEvent;
             map['observed.hidden'] = () => ObservedHiddenEvent;
             let previousRatio = 0;
-            let observer = new IntersectionObserver((entries) => {
-                entries.forEach((entry) => {
+            ExtendedHandler.ObserveWith(ExtendedHandler.GetObserveOptions(options), element, (entry) => {
+                if (entry instanceof IntersectionObserverEntry) {
                     let isIntersecting = (!('isIntersecting' in entry) ? (0 < entry.intersectionRatio) : entry.isIntersecting);
                     if (!isIntersecting) { //Hidden
                         element.dispatchEvent(new Event(ObservedDecrementEvent));
@@ -308,10 +283,14 @@ var AlpineLite;
                         element.dispatchEvent(new Event(ObservedDecrementEvent));
                         previousRatio = entry.intersectionRatio;
                     }
-                });
-            }, observerOptions);
-            ExtendedHandler.observers_.push(observer);
-            observer.observe(element);
+                }
+                else { //Not supported
+                    setTimeout(() => {
+                        element.dispatchEvent(new Event(ObservedUnsupportedEvent));
+                    }, 0);
+                }
+                return true;
+            });
             return AlpineLite.HandlerReturn.Handled;
         }
         static LazyLoad(directive, element, state) {
@@ -334,22 +313,23 @@ var AlpineLite;
             if (!('threshold' in options)) {
                 options['threshold'] = 0.5;
             }
-            let handler = (event) => {
-                ExtendedHandler.FetchLoad(element, options['url']);
-                element.removeEventListener(ObservedVisibleEvent, handler);
-            };
             let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
+            map['unsupported'] = () => ObservedUnsupportedEvent;
+            map['observed.unsupported'] = () => ObservedUnsupportedEvent;
             map['loaded'] = () => LazyLoadedEvent;
             map['lazy.loaded'] = () => LazyLoadedEvent;
-            element.addEventListener(ObservedVisibleEvent, handler);
-            element.addEventListener(ObservedUnsupportedEvent, handler);
-            ExtendedHandler.Observe({
-                original: null,
-                parts: null,
-                raw: null,
-                key: null,
-                value: JSON.stringify(options)
-            }, element, state);
+            ExtendedHandler.ObserveWith(ExtendedHandler.GetObserveOptions(options), element, (entry) => {
+                if (!(entry instanceof IntersectionObserverEntry)) {
+                    setTimeout(() => {
+                        element.dispatchEvent(new Event(ObservedUnsupportedEvent));
+                    }, 0);
+                }
+                else if (entry.isIntersecting) { //Not supported
+                    ExtendedHandler.FetchLoad(element, options['url']);
+                    return false;
+                }
+                return true;
+            });
             return AlpineLite.HandlerReturn.Handled;
         }
         static ConditionalLoad(directive, element, state) {
@@ -382,12 +362,21 @@ var AlpineLite;
             let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
             map['loaded'] = () => LazyLoadedEvent;
             map['lazy.loaded'] = () => LazyLoadedEvent;
+            let previousUrl = null;
             state.TrapGetAccess((change) => {
                 let url = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof url === 'function') { //Call function
                     url = url.call(state.GetValueContext());
                 }
-                ExtendedHandler.FetchLoad(element, url);
+                if (url !== previousUrl) {
+                    if (url === '::reload::') {
+                        url = previousUrl;
+                    }
+                    else {
+                        previousUrl = url;
+                    }
+                    ExtendedHandler.FetchLoad(element, url);
+                }
             }, true);
             return AlpineLite.HandlerReturn.Handled;
         }
@@ -425,12 +414,67 @@ var AlpineLite;
             });
             return AlpineLite.HandlerReturn.Handled;
         }
+        static GetObserveOptions(options) {
+            let observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0
+            };
+            if (options && typeof options === 'object') {
+                if ('root' in options) {
+                    observerOptions.root = options['root'];
+                    if (typeof observerOptions.root === 'string') {
+                        observerOptions.root = document.querySelector(observerOptions.root);
+                    }
+                }
+                if ('rootMargin' in options) {
+                    observerOptions.rootMargin = options['rootMargin'];
+                }
+                if ('threshold' in options) {
+                    observerOptions.threshold = options['threshold'];
+                }
+            }
+            return observerOptions;
+        }
+        static ObserveWith(options, element, callback) {
+            if (!('IntersectionObserver' in window)) {
+                callback(false);
+                return;
+            }
+            let observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry) => {
+                    if (!callback(entry)) {
+                        observer.unobserve(element);
+                        for (let i = 0; i < ExtendedHandler.observers_.length; ++i) {
+                            if (ExtendedHandler.observers_[i] === observer) {
+                                ExtendedHandler.observers_.splice(i, 1);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }, options);
+            ExtendedHandler.observers_.push(observer);
+            observer.observe(element);
+        }
         static FetchLoad(element, url) {
-            url = url.trim();
             if (!url) {
                 return;
             }
-            if (element.tagName === 'IMG' || element.tagName === 'IFRAME') {
+            let emptyElement = () => {
+                while (element.firstChild) {
+                    element.removeChild(element.firstChild);
+                }
+            };
+            if (url === '::destroy::') {
+                if (element.tagName === 'IMG' || element.tagName === 'IFRAME') {
+                    element.src = '';
+                }
+                else {
+                    emptyElement();
+                }
+            }
+            else if (element.tagName === 'IMG' || element.tagName === 'IFRAME') {
                 let loadHandler = (event) => {
                     element.removeEventListener('load', loadHandler);
                     element.dispatchEvent(new Event(LazyLoadedEvent));
@@ -438,10 +482,26 @@ var AlpineLite;
                 element.addEventListener('load', loadHandler);
                 element.src = url;
             }
-            else {
+            else if (element.tagName === 'SELECT') {
+                fetch(url)
+                    .then((response) => response.json())
+                    .then((data) => {
+                    emptyElement();
+                    data.forEach((entry) => {
+                        let option = document.createElement('option');
+                        option.value = entry.key;
+                        option.textContent = entry.value;
+                        element.appendChild(option);
+                    });
+                    element.dispatchEvent(new Event(LazyLoadedEvent));
+                    element.dispatchEvent(new Event('change'));
+                });
+            }
+            else { //Generic
                 fetch(url)
                     .then((response) => response.text())
                     .then((data) => {
+                    emptyElement();
                     element.innerHTML = data;
                     element.dispatchEvent(new Event(LazyLoadedEvent));
                 });
