@@ -6,6 +6,7 @@ export namespace AlpineLite{
         Handled,
         Rejected,
         SkipBulk,
+        QuitAll,
     }
 
     export interface ProcessorDirective{

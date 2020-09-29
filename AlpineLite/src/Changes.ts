@@ -13,6 +13,7 @@ export namespace AlpineLite{
         original: IChange;
         name: string;
         path: string;
+        isAncestor: boolean;
     }
 
     export type ChangeCallbackType = (change: IChange | IBubbledChange) => void;

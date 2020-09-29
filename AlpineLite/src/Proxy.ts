@@ -13,6 +13,7 @@ export namespace AlpineLite{
         element: HTMLElement;
         state: StateScope.AlpineLite.State;
         restricted?: boolean;
+        noAlert?: boolean;
     }
 
     export interface ProxyMap{
@@ -74,21 +75,25 @@ export namespace AlpineLite{
                         return target;
                     }
 
+                    if (name === '__AlpineLitePath__'){
+                        return self.GetPath();
+                    }
+
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     let keyResult = Proxy.HandleSpecialKey(name, self);
 
                     if (!(keyResult instanceof ProxyNoResult)){//Value returned
-                        return Proxy.ResolveValue(keyResult);
+                        return Proxy.ResolveValue(keyResult, self);
                     }
                     
                     if (element && !self.details_.element && !(prop in target)){
                         let value = Proxy.Get(element, name, false, self.details_.state);
                         if (!(value instanceof ProxyNoResult)){//Value returned
-                            return Proxy.ResolveValue(value);
+                            return Proxy.ResolveValue(value, self);
                         }
                     }
 
-                    let baseValue = ((prop in target) ? Reflect.get(target, prop) : null);
+                    let baseValue = Proxy.ResolveValue(((prop in target) ? Reflect.get(target, prop) : null), self);
                     let value = Proxy.Create({
                         target: baseValue,
                         name: name,
@@ -167,6 +172,10 @@ export namespace AlpineLite{
         }
 
         private Alert_(type: string, name: string, exists: boolean, value: any, alertChildren: boolean): void{
+            if (this.details_.noAlert){
+                return;
+            }
+            
             let change : ChangesScope.AlpineLite.IChange = {
                 type: type,
                 name: name,
@@ -195,7 +204,8 @@ export namespace AlpineLite{
                 changes.Add({
                     original: change,
                     name: this.details_.name,
-                    path: this.GetPath()
+                    path: this.GetPath(),
+                    isAncestor: false
                 });
             }
 
@@ -215,7 +225,8 @@ export namespace AlpineLite{
                     changes.Add({
                         original: change,
                         name: this.proxies_[name].details_.name,
-                        path: this.proxies_[name].GetPath()
+                        path: this.proxies_[name].GetPath(),
+                        isAncestor: true
                     });
                 }
 
@@ -446,12 +457,27 @@ export namespace AlpineLite{
             return (('__AlpineLiteTarget__' in target) ? target['__AlpineLiteTarget__'] : target);
         }
 
-        public static ResolveValue(value: any): any{
-            if (value instanceof ValueScope.AlpineLite.Value){
-                return (value as ValueScope.AlpineLite.Value).Get();
+        public static ResolveValue(value: any, proxy: Proxy): any{
+            if (!(value instanceof ValueScope.AlpineLite.Value)){
+                return value;
             }
             
-            return value;
+            let baseValue = (value as ValueScope.AlpineLite.Value).Get();
+            let proxyValue = Proxy.Create({
+                target: baseValue,
+                name: name,
+                parent: null,
+                element: null,
+                state: proxy.details_.state,
+                restricted: false,
+                noAlert: true
+            });
+
+            if (proxyValue){
+                return proxyValue.proxy_;
+            }
+
+            return baseValue;
         }
 
         public static GetProxyKey(): string{
@@ -474,7 +500,7 @@ export namespace AlpineLite{
             if (contextElement && typeof contextElement === 'object' && (externalKey in contextElement)){
                 let externalCallbacks = contextElement[externalKey];
                 if (name in externalCallbacks){
-                    let result = Proxy.ResolveValue((externalCallbacks[name] as (proxy: Proxy) => any)(proxy));
+                    let result = Proxy.ResolveValue((externalCallbacks[name] as (proxy: Proxy) => any)(proxy), proxy);
                     if (!(result instanceof ProxyNoResult)){
                         return result;
                     }
@@ -489,7 +515,7 @@ export namespace AlpineLite{
             let handlers: Array<ProxySpecialKeyHandler> = Proxy.specialKeys_[name];
             
             for (let i = 0; i < handlers.length; ++i){
-                result = Proxy.ResolveValue((handlers[i])(proxy, result));
+                result = Proxy.ResolveValue((handlers[i])(proxy, result), proxy);
                 if (result instanceof ProxyStopPropagation){
                     return (result as ProxyStopPropagation).value;
                 }

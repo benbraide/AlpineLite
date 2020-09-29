@@ -331,18 +331,21 @@ var AlpineLite;
                     if (name === '__AlpineLiteTarget__') {
                         return target;
                     }
+                    if (name === '__AlpineLitePath__') {
+                        return self.GetPath();
+                    }
                     let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     let keyResult = Proxy.HandleSpecialKey(name, self);
                     if (!(keyResult instanceof ProxyNoResult)) { //Value returned
-                        return Proxy.ResolveValue(keyResult);
+                        return Proxy.ResolveValue(keyResult, self);
                     }
                     if (element && !self.details_.element && !(prop in target)) {
                         let value = Proxy.Get(element, name, false, self.details_.state);
                         if (!(value instanceof ProxyNoResult)) { //Value returned
-                            return Proxy.ResolveValue(value);
+                            return Proxy.ResolveValue(value, self);
                         }
                     }
-                    let baseValue = ((prop in target) ? Reflect.get(target, prop) : null);
+                    let baseValue = Proxy.ResolveValue(((prop in target) ? Reflect.get(target, prop) : null), self);
                     let value = Proxy.Create({
                         target: baseValue,
                         name: name,
@@ -407,6 +410,9 @@ var AlpineLite;
         }
         Alert_(type, name, exists, value, alertChildren) {
             var _a;
+            if (this.details_.noAlert) {
+                return;
+            }
             let change = {
                 type: type,
                 name: name,
@@ -432,7 +438,8 @@ var AlpineLite;
                 changes.Add({
                     original: change,
                     name: this.details_.name,
-                    path: this.GetPath()
+                    path: this.GetPath(),
+                    isAncestor: false
                 });
             }
             if (this.details_.parent) {
@@ -450,7 +457,8 @@ var AlpineLite;
                     changes.Add({
                         original: change,
                         name: this.proxies_[name].details_.name,
-                        path: this.proxies_[name].GetPath()
+                        path: this.proxies_[name].GetPath(),
+                        isAncestor: true
                     });
                 }
                 this.proxies_[name].AlertChildren_(change);
@@ -632,11 +640,24 @@ var AlpineLite;
             }
             return (('__AlpineLiteTarget__' in target) ? target['__AlpineLiteTarget__'] : target);
         }
-        static ResolveValue(value) {
-            if (value instanceof Value) {
-                return value.Get();
+        static ResolveValue(value, proxy) {
+            if (!(value instanceof Value)) {
+                return value;
             }
-            return value;
+            let baseValue = value.Get();
+            let proxyValue = Proxy.Create({
+                target: baseValue,
+                name: name,
+                parent: null,
+                element: null,
+                state: proxy.details_.state,
+                restricted: false,
+                noAlert: true
+            });
+            if (proxyValue) {
+                return proxyValue.proxy_;
+            }
+            return baseValue;
         }
         static GetProxyKey() {
             return '__AlpineLiteProxy__';
@@ -654,7 +675,7 @@ var AlpineLite;
             if (contextElement && typeof contextElement === 'object' && (externalKey in contextElement)) {
                 let externalCallbacks = contextElement[externalKey];
                 if (name in externalCallbacks) {
-                    let result = Proxy.ResolveValue(externalCallbacks[name](proxy));
+                    let result = Proxy.ResolveValue(externalCallbacks[name](proxy), proxy);
                     if (!(result instanceof ProxyNoResult)) {
                         return result;
                     }
@@ -666,7 +687,7 @@ var AlpineLite;
             let result = new ProxyNoResult();
             let handlers = Proxy.specialKeys_[name];
             for (let i = 0; i < handlers.length; ++i) {
-                result = Proxy.ResolveValue((handlers[i])(proxy, result));
+                result = Proxy.ResolveValue((handlers[i])(proxy, result), proxy);
                 if (result instanceof ProxyStopPropagation) {
                     return result.value;
                 }
@@ -1141,6 +1162,7 @@ var AlpineLite;
         HandlerReturn[HandlerReturn["Handled"] = 1] = "Handled";
         HandlerReturn[HandlerReturn["Rejected"] = 2] = "Rejected";
         HandlerReturn[HandlerReturn["SkipBulk"] = 3] = "SkipBulk";
+        HandlerReturn[HandlerReturn["QuitAll"] = 4] = "QuitAll";
     })(HandlerReturn = AlpineLite.HandlerReturn || (AlpineLite.HandlerReturn = {}));
     //Handler begin
     class Handler {
@@ -1205,8 +1227,7 @@ var AlpineLite;
             if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && element.closest('template')) { //Inside template -- ignore
                 return;
             }
-            this.One(element);
-            if (isTemplate) { //Don't process template content
+            if (this.One(element) == HandlerReturn.QuitAll || isTemplate) { //Don't process template content
                 return;
             }
             let children = element.children;
@@ -1216,19 +1237,14 @@ var AlpineLite;
         }
         One(element, options) {
             if (!Processor.Check(element, options)) { //Check failed -- ignore
-                return;
+                return HandlerReturn.Nil;
             }
             let isTemplate = (element.tagName == 'TEMPLATE');
             if (!isTemplate && (options === null || options === void 0 ? void 0 : options.checkTemplate) && element.closest('template')) { //Inside template -- ignore
-                return;
+                return HandlerReturn.Nil;
             }
-            Processor.TraverseDirectives(element, (directive) => {
+            let result = Processor.TraverseDirectives(element, (directive) => {
                 return this.DispatchDirective(directive, element);
-            }, (attribute) => {
-                // this.state_.TrapGetAccess((change: IChange | IBubbledChange): void => {
-                //     attribute.value = Evaluator.Interpolate(attribute.value, this.state_, elementNode);
-                // }, true);
-                return true;
             });
             let key = Processor.GetPostProcessorKey();
             if (key in element) {
@@ -1237,6 +1253,7 @@ var AlpineLite;
                 });
                 delete element[key];
             }
+            return result;
         }
         DispatchDirective(directive, element) {
             let result;
@@ -1248,7 +1265,7 @@ var AlpineLite;
             catch (err) {
                 this.state_.PopElementContext();
                 this.state_.ReportError(err, `AlpineLite.Processor.DispatchDirective._Handle_.${directive.key}`);
-                return true;
+                return HandlerReturn.Nil;
             }
             if (result == HandlerReturn.Nil) { //Not handled
                 if (1 < directive.parts.length && directive.parts[0] === 'static') {
@@ -1279,14 +1296,13 @@ var AlpineLite;
                     this.state_.ReportWarning(`'${directive.original}': Handler not found. Skipping...`, `AlpineLite.Processor.DispatchDirective._Handle_.${directive.key}`);
                 }
             }
-            if (result == HandlerReturn.Rejected) {
-                return false;
+            if (result != HandlerReturn.Rejected && result != HandlerReturn.QuitAll) {
+                element.removeAttribute(directive.original);
+                if (result == HandlerReturn.Handled) {
+                    Processor.GetElementId(element, this.state_);
+                }
             }
-            element.removeAttribute(directive.original);
-            if (result == HandlerReturn.Handled) {
-                Processor.GetElementId(element, this.state_);
-            }
-            return true;
+            return result;
         }
         static Check(element, options) {
             if ((element === null || element === void 0 ? void 0 : element.nodeType) !== 1) { //Not an HTMLElement
@@ -1300,20 +1316,22 @@ var AlpineLite;
         static GetHTMLElement(node) {
             return ((node.nodeType == 1) ? node : node.parentElement);
         }
-        static TraverseDirectives(element, callback, noMatchCallback) {
+        static TraverseDirectives(element, callback) {
             let attributes = new Array();
             for (let i = 0; i < element.attributes.length; ++i) { //Duplicate attributes
                 attributes.push(element.attributes[i]);
             }
+            let result = HandlerReturn.Nil;
             for (let i = 0; i < attributes.length; ++i) { //Traverse attributes
                 let directive = Processor.GetDirective(attributes[i]);
-                if (!directive && noMatchCallback && !noMatchCallback(attributes[i])) {
-                    return;
-                }
-                if (directive && !callback(directive)) {
-                    return;
+                if (directive) {
+                    result = callback(directive);
+                    if (result == HandlerReturn.Rejected || result == HandlerReturn.QuitAll) {
+                        break;
+                    }
                 }
             }
+            return result;
         }
         static GetDirective(attribute) {
             let matches = attribute.name.match(/^(data-)?x-(.+)$/);
@@ -1835,9 +1853,127 @@ var AlpineLite;
                 for (let name in attributes) { //Remove copied attributes
                     element.removeAttribute(name);
                 }
-                return HandlerReturn.Rejected;
+                return HandlerReturn.QuitAll;
             }
             return HandlerReturn.Handled;
+        }
+        static Each(directive, element, state) {
+            let attributes = new Map();
+            for (let i = 0; i < element.attributes.length; ++i) { //Copy attributes
+                if (element.attributes[i].name !== directive.original && element.attributes[i].name !== State.GetIdKey()) {
+                    attributes[element.attributes[i].name] = element.attributes[i].value;
+                }
+            }
+            element.removeAttribute(directive.original);
+            for (let name in attributes) { //Remove copied attributes
+                element.removeAttribute(name);
+            }
+            let details = {
+                marker: document.createElement('x-placeholder'),
+                list: new Array(),
+                target: null
+            };
+            element.parentElement.insertBefore(details.marker, element);
+            element.parentElement.removeChild(element);
+            let processor = new Processor(state);
+            let insert = () => {
+                let clone = element.cloneNode(true);
+                let locals;
+                let proxyKey = Proxy.GetProxyKey();
+                if (!(proxyKey in clone)) {
+                    let raw = {};
+                    let localProxy = Proxy.Create({
+                        target: raw,
+                        name: state.GetElementId(clone),
+                        parent: null,
+                        element: clone,
+                        state: state
+                    });
+                    clone[proxyKey] = {
+                        raw: raw,
+                        proxy: localProxy
+                    };
+                }
+                locals = clone[proxyKey];
+                locals.raw['$each'] = new Value(() => {
+                    let getIndex = () => {
+                        for (let i = 0; i < details.list.length; ++i) {
+                            if (details.list[i] === clone) {
+                                return i;
+                            }
+                        }
+                        return -1;
+                    };
+                    return {
+                        count: new Value(() => {
+                            return details.target.length;
+                        }),
+                        index: new Value(() => {
+                            return getIndex();
+                        }),
+                        value: new Value(() => {
+                            return details.target[getIndex()];
+                        })
+                    };
+                });
+                details.list.push(clone);
+                details.marker.parentElement.insertBefore(clone, details.marker);
+                processor.All(clone);
+            };
+            let getValue = () => {
+                let result = Evaluator.Evaluate(directive.value, state, element);
+                return ((typeof result === 'function') ? result.call(state.GetValueContext()) : result);
+            };
+            let build = () => {
+                for (let i = 0; i < details.target.length; ++i) {
+                    insert();
+                }
+            };
+            let purge = () => {
+                details.list.forEach((clone) => {
+                    clone.parentElement.removeChild(clone);
+                });
+                details.list = new Array();
+            };
+            let refresh = () => {
+                purge();
+                details.target = getValue();
+                if (Array.isArray(details.target)) {
+                    build();
+                }
+            };
+            state.TrapGetAccess((change) => {
+                details.target = getValue();
+                if (Array.isArray(details.target)) {
+                    build();
+                }
+            }, (change) => {
+                if ('original' in change) { //Bubbled
+                    if (change.isAncestor) {
+                        refresh();
+                    }
+                    return;
+                }
+                let nonBubbledChange = change;
+                if (nonBubbledChange.type !== 'set' || nonBubbledChange.name !== 'length') {
+                    return;
+                }
+                if (details.target.length < details.list.length) { //Item(s) removed
+                    let count = (details.list.length - details.target.length);
+                    for (let i = 0; i < count; ++i) {
+                        let clone = details.list[details.list.length - 1];
+                        clone.parentElement.removeChild(clone);
+                        details.list.pop();
+                    }
+                }
+                else if (details.target.length > details.list.length) { //Item(s) added
+                    let count = (details.target.length - details.list.length);
+                    for (let i = 0; i < count; ++i) {
+                        insert();
+                    }
+                }
+            });
+            return HandlerReturn.QuitAll;
         }
         static AddAll() {
             Handler.AddDirectiveHandler('cloak', CoreHandler.Cloak);
@@ -1855,6 +1991,7 @@ var AlpineLite;
             Handler.AddDirectiveHandler('model', CoreHandler.Model);
             Handler.AddDirectiveHandler('show', CoreHandler.Show);
             Handler.AddDirectiveHandler('if', CoreHandler.If);
+            Handler.AddDirectiveHandler('each', CoreHandler.Each);
         }
         static GetUninitKey() {
             return '__AlpineLiteUninit__';

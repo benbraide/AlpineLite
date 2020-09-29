@@ -1,9 +1,10 @@
 import * as StateScope from './State'
 import * as ProxyScope from './Proxy'
+import * as ValueScope from './Value'
 import * as HandlerScope from './Handler'
 import * as ChangesScope from './Changes'
 import * as EvaluatorScope from './Evaluator'
-import * as PlaceholderElementScope from './PlaceholderElement'
+import * as ProcessorScope from './Processor'
 
 export namespace AlpineLite{
     interface TextHandlerOptions{
@@ -355,10 +356,152 @@ export namespace AlpineLite{
                     element.removeAttribute(name);
                 }
 
-                return HandlerScope.AlpineLite.HandlerReturn.Rejected;
+                return HandlerScope.AlpineLite.HandlerReturn.QuitAll;
             }
 
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
+        }
+
+        public static Each(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
+            let attributes = new Map<string, string>();
+            for (let i = 0; i < element.attributes.length; ++i){//Copy attributes
+                if (element.attributes[i].name !== directive.original && element.attributes[i].name !== StateScope.AlpineLite.State.GetIdKey()){
+                    attributes[element.attributes[i].name] = element.attributes[i].value;
+                }
+            }
+
+            element.removeAttribute(directive.original);
+            for (let name in attributes){//Remove copied attributes
+                element.removeAttribute(name);
+            }
+
+            let details = {
+                marker: document.createElement('x-placeholder'),
+                list: new Array<HTMLElement>(),
+                target: null
+            }
+
+            element.parentElement.insertBefore(details.marker, element);
+            element.parentElement.removeChild(element);
+            
+            let processor = new ProcessorScope.AlpineLite.Processor(state);
+            let insert = () => {
+                let clone = (element.cloneNode(true) as HTMLElement);
+                let locals: {
+                    raw: any;
+                    proxy: ProxyScope.AlpineLite.Proxy;
+                };
+    
+                let proxyKey = ProxyScope.AlpineLite.Proxy.GetProxyKey();
+                if (!(proxyKey in clone)){
+                    let raw = {};
+                    let localProxy = ProxyScope.AlpineLite.Proxy.Create({
+                        target: raw,
+                        name: state.GetElementId(clone),
+                        parent: null,
+                        element: clone,
+                        state: state
+                    });
+    
+                    clone[proxyKey] = {
+                        raw: raw,
+                        proxy: localProxy
+                    };
+                }
+                
+                locals = clone[proxyKey];
+                locals.raw['$each'] = new ValueScope.AlpineLite.Value(() => {
+                    let getIndex = (): number => {
+                        for (let i = 0; i < details.list.length; ++i){
+                            if (details.list[i] === clone){
+                                return i;
+                            }
+                        }
+
+                        return -1;
+                    };
+                    
+                    return {
+                        count: new ValueScope.AlpineLite.Value(() => {
+                            return (details.target as Array<any>).length;
+                        }),
+                        index: new ValueScope.AlpineLite.Value(() => {
+                            return getIndex();
+                        }),
+                        value: new ValueScope.AlpineLite.Value(() => {
+                            return (details.target as Array<any>)[getIndex()];
+                        })
+                    };
+                });
+                
+                details.list.push(clone);
+                details.marker.parentElement.insertBefore(clone, details.marker);
+                processor.All(clone);
+            };
+
+            let getValue = (): any => {
+                let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+                return ((typeof result === 'function') ? (result as () => any).call(state.GetValueContext()) : result);
+            };
+
+            let build = () => {
+                for (let i = 0; i < (details.target as Array<any>).length; ++i){
+                    insert();
+                }
+            };
+
+            let purge = () => {
+                details.list.forEach((clone) => {
+                    clone.parentElement.removeChild(clone);
+                });
+
+                details.list = new Array<HTMLElement>();
+            };
+
+            let refresh = () => {
+                purge();
+                details.target = getValue();
+                if (Array.isArray(details.target)){
+                    build();
+                }
+            };
+
+            state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                details.target = getValue();
+                if (Array.isArray(details.target)){
+                    build();
+                }
+            }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
+                if ('original' in change){//Bubbled
+                    if ((change as ChangesScope.AlpineLite.IBubbledChange).isAncestor){
+                        refresh();
+                    }
+
+                    return;
+                }
+                
+                let nonBubbledChange = (change as ChangesScope.AlpineLite.IChange);
+                if (nonBubbledChange.type !== 'set' || nonBubbledChange.name !== 'length'){
+                    return;
+                }
+
+                if ((details.target as Array<any>).length < details.list.length){//Item(s) removed
+                    let count = (details.list.length - (details.target as Array<any>).length);
+                    for (let i = 0; i < count; ++i){
+                        let clone = details.list[details.list.length - 1];
+                        clone.parentElement.removeChild(clone);
+                        details.list.pop();
+                    }
+                }
+                else if ((details.target as Array<any>).length > details.list.length){//Item(s) added
+                    let count = ((details.target as Array<any>).length - details.list.length);
+                    for (let i = 0; i < count; ++i){
+                        insert();
+                    }
+                }
+            });
+            
+            return HandlerScope.AlpineLite.HandlerReturn.QuitAll;
         }
 
         public static AddAll(){
@@ -382,6 +525,7 @@ export namespace AlpineLite{
 
             HandlerScope.AlpineLite.Handler.AddDirectiveHandler('show', CoreHandler.Show);
             HandlerScope.AlpineLite.Handler.AddDirectiveHandler('if', CoreHandler.If);
+            HandlerScope.AlpineLite.Handler.AddDirectiveHandler('each', CoreHandler.Each);
         }
 
         public static GetUninitKey(): string{

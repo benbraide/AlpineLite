@@ -109,6 +109,11 @@
         <img src="" alt="" style="height: 150px; width: 150px; margin-top: 500px;" x-data x-lazy-load="'/soup.JPG'" x-on-loaded="$console.log('Image loaded')">
     </div>
     <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-on-visible="$console.log('Visible')" x-on-hidden="$console.log('Hidden')"></div>
+    <div x-data="{list: ['First', 'Second', 'Third', 'Last']}" x-each="list">
+        <span>Value: </span><span x-text="$each.value"></span> | 
+        <span>Index: </span><span x-text="$each.index"></span> | 
+        <span>Count: </span><span x-text="$each.count"></span>
+    </div>
     <script src="./dist/Bundle.js"></script>
     <script src="./dist/ScrollTop.js"></script>
     <script src="./dist/ExtendedHandler.js"></script>

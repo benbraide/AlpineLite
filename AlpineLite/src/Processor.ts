@@ -26,8 +26,7 @@ export namespace AlpineLite{
                 return;
             }
 
-            this.One(element);
-            if (isTemplate){//Don't process template content
+            if (this.One(element) == HandlerScope.AlpineLite.HandlerReturn.QuitAll || isTemplate){//Don't process template content
                 return;
             }
 
@@ -37,23 +36,18 @@ export namespace AlpineLite{
             }
         }
 
-        public One(element: HTMLElement, options?: ProcessorOptions): void{
+        public One(element: HTMLElement, options?: ProcessorOptions): HandlerScope.AlpineLite.HandlerReturn{
             if (!Processor.Check(element, options)){//Check failed -- ignore
-                return;
+                return HandlerScope.AlpineLite.HandlerReturn.Nil;
             }
 
             let isTemplate = (element.tagName == 'TEMPLATE');
             if (!isTemplate && options?.checkTemplate && element.closest('template')){//Inside template -- ignore
-                return;
+                return HandlerScope.AlpineLite.HandlerReturn.Nil;
             }
             
-            Processor.TraverseDirectives(element, (directive: HandlerScope.AlpineLite.ProcessorDirective): boolean => {
+            let result = Processor.TraverseDirectives(element, (directive: HandlerScope.AlpineLite.ProcessorDirective): HandlerScope.AlpineLite.HandlerReturn => {
                 return this.DispatchDirective(directive, element);
-            }, (attribute: Attr): boolean => {//Check for data binding inside attribute
-                // this.state_.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                //     attribute.value = EvaluatorScope.AlpineLite.Evaluator.Interpolate(attribute.value, this.state_, elementNode);
-                // }, true);
-                return true;
             });
 
             let key = Processor.GetPostProcessorKey();
@@ -64,9 +58,11 @@ export namespace AlpineLite{
 
                 delete element[key];
             }
+
+            return result;
         }
 
-        public DispatchDirective(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement): boolean{
+        public DispatchDirective(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement): HandlerScope.AlpineLite.HandlerReturn{
             let result: HandlerScope.AlpineLite.HandlerReturn;
             try{
                 this.state_.PushElementContext(element);
@@ -76,7 +72,7 @@ export namespace AlpineLite{
             catch (err){
                 this.state_.PopElementContext();
                 this.state_.ReportError(err, `AlpineLite.Processor.DispatchDirective._Handle_.${directive.key}`);
-                return true;
+                return HandlerScope.AlpineLite.HandlerReturn.Nil;
             }
             
             if (result == HandlerScope.AlpineLite.HandlerReturn.Nil){//Not handled
@@ -112,16 +108,14 @@ export namespace AlpineLite{
                 }
             }
 
-            if (result == HandlerScope.AlpineLite.HandlerReturn.Rejected){
-                return false;
-            }
-
-            element.removeAttribute(directive.original);
-            if (result == HandlerScope.AlpineLite.HandlerReturn.Handled){
-                Processor.GetElementId(element, this.state_);
+            if (result != HandlerScope.AlpineLite.HandlerReturn.Rejected && result != HandlerScope.AlpineLite.HandlerReturn.QuitAll){
+                element.removeAttribute(directive.original);
+                if (result == HandlerScope.AlpineLite.HandlerReturn.Handled){
+                    Processor.GetElementId(element, this.state_);
+                }
             }
             
-            return true;
+            return result;
         }
 
         public static Check(element: HTMLElement, options: ProcessorOptions): boolean{
@@ -140,22 +134,24 @@ export namespace AlpineLite{
             return ((node.nodeType == 1) ? (node as HTMLElement) : node.parentElement);
         }
 
-        public static TraverseDirectives(element: HTMLElement, callback: (directive: HandlerScope.AlpineLite.ProcessorDirective) => boolean, noMatchCallback?: (attribute: Attr) => boolean): void{
+        public static TraverseDirectives(element: HTMLElement, callback: (directive: HandlerScope.AlpineLite.ProcessorDirective) => HandlerScope.AlpineLite.HandlerReturn): HandlerScope.AlpineLite.HandlerReturn{
             let attributes = new Array<Attr>();
             for (let i = 0; i < element.attributes.length; ++i){//Duplicate attributes
                 attributes.push(element.attributes[i]);
             }
 
+            let result = HandlerScope.AlpineLite.HandlerReturn.Nil;
             for (let i = 0; i < attributes.length; ++i){//Traverse attributes
                 let directive = Processor.GetDirective(attributes[i]);
-                if (!directive && noMatchCallback && !noMatchCallback(attributes[i])){
-                    return;
-                }
-
-                if (directive && !callback(directive)){
-                    return;
+                if (directive){
+                    result = callback(directive);
+                    if (result == HandlerScope.AlpineLite.HandlerReturn.Rejected || result == HandlerScope.AlpineLite.HandlerReturn.QuitAll){
+                        break;
+                    }
                 }
             }
+
+            return result;
         }
 
         public static GetDirective(attribute: Attr): HandlerScope.AlpineLite.ProcessorDirective{

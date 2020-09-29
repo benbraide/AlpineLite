@@ -23,6 +23,7 @@ declare namespace AlpineLite {
         original: IChange;
         name: string;
         path: string;
+        isAncestor: boolean;
     }
     type ChangeCallbackType = (change: IChange | IBubbledChange) => void;
     interface GetAccessStorageInfo {
@@ -98,6 +99,7 @@ declare namespace AlpineLite {
         element: HTMLElement;
         state: State;
         restricted?: boolean;
+        noAlert?: boolean;
     }
     export class ProxyNoResult {
     }
@@ -135,7 +137,7 @@ declare namespace AlpineLite {
         static Delete(element: HTMLElement, name: string, state: State): boolean;
         static GetNonProxy(target: any): any;
         static GetBaseValue(target: any): any;
-        static ResolveValue(value: any): any;
+        static ResolveValue(value: any, proxy: Proxy): any;
         static GetProxyKey(): string;
         static AddSpecialKey(key: string, handler: ProxySpecialKeyHandler): void;
         static HandleSpecialKey(name: string, proxy: Proxy): any;
@@ -159,7 +161,8 @@ declare namespace AlpineLite {
         Nil = 0,
         Handled = 1,
         Rejected = 2,
-        SkipBulk = 3
+        SkipBulk = 3,
+        QuitAll = 4
     }
     export interface ProcessorDirective {
         original: string;
@@ -188,11 +191,11 @@ declare namespace AlpineLite {
         private state_;
         constructor(state: State);
         All(element: HTMLElement, options?: ProcessorOptions): void;
-        One(element: HTMLElement, options?: ProcessorOptions): void;
-        DispatchDirective(directive: ProcessorDirective, element: HTMLElement): boolean;
+        One(element: HTMLElement, options?: ProcessorOptions): HandlerReturn;
+        DispatchDirective(directive: ProcessorDirective, element: HTMLElement): HandlerReturn;
         static Check(element: HTMLElement, options: ProcessorOptions): boolean;
         static GetHTMLElement(node: Node): HTMLElement;
-        static TraverseDirectives(element: HTMLElement, callback: (directive: ProcessorDirective) => boolean, noMatchCallback?: (attribute: Attr) => boolean): void;
+        static TraverseDirectives(element: HTMLElement, callback: (directive: ProcessorDirective) => HandlerReturn): HandlerReturn;
         static GetDirective(attribute: Attr): ProcessorDirective;
         static GetCamelCaseDirectiveName(name: string): string;
         static GetElementId(element: HTMLElement, state: State): string;
@@ -242,6 +245,7 @@ declare namespace AlpineLite {
         private static Input_;
         static Show(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static If(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
+        static Each(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static AddAll(): void;
         static GetUninitKey(): string;
     }
