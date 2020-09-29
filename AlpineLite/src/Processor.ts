@@ -55,6 +55,15 @@ export namespace AlpineLite{
                 // }, true);
                 return true;
             });
+
+            let key = Processor.GetPostProcessorKey();
+            if (key in element){
+                (element[key] as Array<() => void>).forEach((callback) => {
+                    callback();
+                });
+
+                delete element[key];
+            }
         }
 
         public DispatchDirective(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement): boolean{
@@ -176,6 +185,10 @@ export namespace AlpineLite{
 
         public static GetIdKey(): string{
             return StateScope.AlpineLite.State.GetIdKey();
+        }
+
+        public static GetPostProcessorKey(): string{
+            return '__AlpineLitePostProcessor__';
         }
     }
 }

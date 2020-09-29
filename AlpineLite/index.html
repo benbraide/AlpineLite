@@ -42,7 +42,16 @@
             <div>
                 <input type="text" x-model="name">
                 <input type="text" x-model="name" x-state x-on-dirty="$console.log('Input is dirty', $isDirty)" x-on-typing="isTyping" x-on-stopped.typing="$console.log('User stopped typing', $isTyping)">
-                <input type="email" x-model="name" x-state="{reportInitial: true}" x-on-valid="$console.log('Valid input', $isValid)" x-on-invalid="$console.log('Invalid input')">
+                <input type="email" x-model="name" x-state x-dirty-state="thisIsDirty" x-typing-state="thisIsTyping" x-valid-state="thisIsValid">
+                <div>
+                    <span>Is Dirty: </span><span x-text="thisIsDirty || false"></span>
+                </div>
+                <div>
+                    <span>Is Typing: </span><span x-text="thisIsTyping || false"></span>
+                </div>
+                <div>
+                    <span>Is Valid: </span><span x-text="thisIsValid"></span>
+                </div>
             </div>
             <form action="" style="margin-top: 20px; border: 1px solid gray;" x-state x-ref="form" x-state x-on-dirty="isDirty = true" x-on-clean="isDirty = false" x-on-typing="$console.log('User is typing')" x-on-stopped.typing="$console.log('User stopped typing')">
                 <div>

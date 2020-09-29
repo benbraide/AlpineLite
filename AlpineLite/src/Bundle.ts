@@ -1563,6 +1563,15 @@ namespace AlpineLite{
                 // }, true);
                 return true;
             });
+
+            let key = Processor.GetPostProcessorKey();
+            if (key in element){
+                (element[key] as Array<() => void>).forEach((callback) => {
+                    callback();
+                });
+
+                delete element[key];
+            }
         }
 
         public DispatchDirective(directive: ProcessorDirective, element: HTMLElement): boolean{
@@ -1684,6 +1693,10 @@ namespace AlpineLite{
 
         public static GetIdKey(): string{
             return State.GetIdKey();
+        }
+
+        public static GetPostProcessorKey(): string{
+            return '__AlpineLitePostProcessor__';
         }
     }
 

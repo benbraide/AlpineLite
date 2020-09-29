@@ -197,6 +197,7 @@ declare namespace AlpineLite {
         static GetCamelCaseDirectiveName(name: string): string;
         static GetElementId(element: HTMLElement, state: State): string;
         static GetIdKey(): string;
+        static GetPostProcessorKey(): string;
     }
     export class PlaceholderElement extends HTMLElement {
         static Register(): void;

@@ -1230,6 +1230,13 @@ var AlpineLite;
                 // }, true);
                 return true;
             });
+            let key = Processor.GetPostProcessorKey();
+            if (key in element) {
+                element[key].forEach((callback) => {
+                    callback();
+                });
+                delete element[key];
+            }
         }
         DispatchDirective(directive, element) {
             let result;
@@ -1331,6 +1338,9 @@ var AlpineLite;
         }
         static GetIdKey() {
             return State.GetIdKey();
+        }
+        static GetPostProcessorKey() {
+            return '__AlpineLitePostProcessor__';
         }
     }
     AlpineLite.Processor = Processor;

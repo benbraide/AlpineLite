@@ -4,6 +4,7 @@ var AlpineLite;
     const InputDirtyEvent = 'alpinelite.input.dirty';
     const InputCleanEvent = 'alpinelite.input.clean';
     const InputResetDirtyEvent = 'alpinelite.input.reset.dirty';
+    const InputResetInvalidEvent = 'alpinelite.input.reset.invalid';
     const InputTypingEvent = 'alpinelite.input.typing';
     const InputStoppedTypingEvent = 'alpinelite.input.stopped.typing';
     const InputValidEvent = 'alpinelite.input.valid';
@@ -35,7 +36,7 @@ var AlpineLite;
                 activeValidCheck: false,
                 isDirty: false,
                 isTyping: false,
-                isValid: element.checkValidity()
+                isValid: false
             };
             let stoppedDelay = 750;
             if (options && typeof options === 'object') {
@@ -46,6 +47,28 @@ var AlpineLite;
                     callbackInfo.activeValidCheck = true;
                 }
             }
+            let addStateChange = (value, falseEvent, trueEvent) => {
+                if (!value) {
+                    return AlpineLite.HandlerReturn.Nil;
+                }
+                element.addEventListener(falseEvent, () => {
+                    AlpineLite.Evaluator.Evaluate(`${value} = false`, state, element);
+                });
+                element.addEventListener(trueEvent, () => {
+                    AlpineLite.Evaluator.Evaluate(`${value} = true`, state, element);
+                });
+                return AlpineLite.HandlerReturn.Handled;
+            };
+            let externalHandlerMap = (element[AlpineLite.Handler.GetExternalHandlerKey()] = (element[AlpineLite.Handler.GetExternalHandlerKey()] || {}));
+            externalHandlerMap['dirtyState'] = (directive, element, state) => {
+                return addStateChange(directive.value, InputCleanEvent, InputDirtyEvent);
+            };
+            externalHandlerMap['typingState'] = (directive, element, state) => {
+                return addStateChange(directive.value, InputStoppedTypingEvent, InputTypingEvent);
+            };
+            externalHandlerMap['validState'] = (directive, element, state) => {
+                return addStateChange(directive.value, InputInvalidEvent, InputValidEvent);
+            };
             let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
             map['dirty'] = () => InputDirtyEvent;
             map['input.dirty'] = () => InputDirtyEvent;
@@ -86,28 +109,39 @@ var AlpineLite;
                 return callbackInfo.isValid;
             });
             locals.raw['$resetDirtyEvent'] = new AlpineLite.Value(() => {
-                return new Event('alpinelite.input.reset.dirty');
+                return new Event(InputResetDirtyEvent);
+            });
+            locals.raw['$resetInvalidEvent'] = new AlpineLite.Value(() => {
+                return new Event(InputResetInvalidEvent);
             });
             if (isUnknown) {
-                let inputs = element.querySelectorAll('input');
-                let textAreas = element.querySelectorAll('textarea');
-                let selects = element.querySelectorAll('select');
-                element.addEventListener(InputResetDirtyEvent, (event) => {
-                    if (event.target !== element) { //Bubbled
-                        return;
-                    }
-                    inputs.forEach((elem) => {
-                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
+                let children = element.children;
+                if (children.length == 0) {
+                    let postProcessList = (element[AlpineLite.Processor.GetPostProcessorKey()] = (element[AlpineLite.Processor.GetPostProcessorKey()] || []));
+                    postProcessList.push(() => {
+                        element.dispatchEvent(new Event(InputValidEvent));
                     });
-                    textAreas.forEach((elem) => {
-                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
+                    element.addEventListener(InputResetInvalidEvent, (event) => {
+                        setTimeout(() => {
+                            element.dispatchEvent(new Event(InputValidEvent));
+                        }, 0);
                     });
-                    selects.forEach((elem) => {
-                        elem.dispatchEvent(new Event(InputResetDirtyEvent));
-                    });
-                });
-                let totalCount = (inputs.length + textAreas.length + selects.length), dirtyCount = 0, typingCount = 0, validCount = 0;
+                    return AlpineLite.HandlerReturn.Handled;
+                }
+                let totalCount = children.length, dirtyCount = 0, typingCount = 0, validCount = 0, initialCount = 0;
                 let eventHandlers = new Map();
+                element.addEventListener(InputResetDirtyEvent, (event) => {
+                    for (let i = 0; i < totalCount; ++i) {
+                        children[i].dispatchEvent(new Event(InputResetDirtyEvent));
+                    }
+                });
+                element.addEventListener(InputResetInvalidEvent, (event) => {
+                    validCount = 0;
+                    initialCount = 0;
+                    for (let i = 0; i < totalCount; ++i) {
+                        children[i].dispatchEvent(new Event(InputResetInvalidEvent));
+                    }
+                });
                 eventHandlers[InputDirtyEvent] = (event) => {
                     if (++dirtyCount == 1) {
                         callbackInfo.isDirty = true;
@@ -133,12 +167,29 @@ var AlpineLite;
                     }
                 };
                 eventHandlers[InputValidEvent] = (event) => {
+                    let isLastInit = false;
+                    if (initialCount < totalCount) {
+                        if (++initialCount == totalCount) {
+                            isLastInit = true;
+                        }
+                    }
                     if (++validCount == totalCount) {
                         callbackInfo.isValid = true;
                         element.dispatchEvent(new Event(InputValidEvent));
                     }
+                    else if (isLastInit) {
+                        callbackInfo.isValid = false;
+                        element.dispatchEvent(new Event(InputInvalidEvent));
+                    }
                 };
                 eventHandlers[InputInvalidEvent] = (event) => {
+                    if (initialCount < totalCount) {
+                        if (++initialCount == totalCount) {
+                            callbackInfo.isValid = false;
+                            element.dispatchEvent(new Event(InputInvalidEvent));
+                        }
+                        return;
+                    }
                     --validCount;
                     if (callbackInfo.isValid) {
                         callbackInfo.isValid = false;
@@ -149,9 +200,9 @@ var AlpineLite;
                     stoppedDelay: stoppedDelay,
                     activeValidCheck: callbackInfo.activeValidCheck
                 });
-                inputs.forEach((elem) => {
+                for (let i = 0; i < totalCount; ++i) {
                     for (let event in eventHandlers) {
-                        elem.addEventListener(event, eventHandlers[event]);
+                        children[i].addEventListener(event, eventHandlers[event]);
                     }
                     ExtendedHandler.State({
                         original: null,
@@ -159,43 +210,11 @@ var AlpineLite;
                         raw: null,
                         key: null,
                         value: childOptions
-                    }, elem, state);
-                    if (elem.checkValidity()) {
-                        ++validCount;
-                    }
-                });
-                textAreas.forEach((elem) => {
-                    for (let event in eventHandlers) {
-                        elem.addEventListener(event, eventHandlers[event]);
-                    }
-                    ExtendedHandler.State({
-                        original: null,
-                        parts: null,
-                        raw: null,
-                        key: null,
-                        value: childOptions
-                    }, elem, state);
-                    if (elem.checkValidity()) {
-                        ++validCount;
-                    }
-                });
-                selects.forEach((elem) => {
-                    for (let event in eventHandlers) {
-                        elem.addEventListener(event, eventHandlers[event]);
-                    }
-                    ExtendedHandler.State({
-                        original: null,
-                        parts: null,
-                        raw: null,
-                        key: null,
-                        value: childOptions
-                    }, elem, state);
-                    if (elem.checkValidity()) {
-                        ++validCount;
-                    }
-                });
+                    }, children[i], state);
+                }
                 return AlpineLite.HandlerReturn.Handled;
             }
+            callbackInfo.isValid = element.checkValidity();
             let counter = 0;
             let eventCallback = (event) => {
                 let checkpoint = ++counter;
@@ -242,8 +261,20 @@ var AlpineLite;
             element.addEventListener(InputResetDirtyEvent, (event) => {
                 if (callbackInfo.isDirty) {
                     callbackInfo.isDirty = false;
-                    element.dispatchEvent(new Event(InputCleanEvent));
+                    setTimeout(() => {
+                        element.dispatchEvent(new Event(InputCleanEvent));
+                    }, 0);
                 }
+            });
+            element.addEventListener(InputResetInvalidEvent, (event) => {
+                callbackInfo.isValid = element.checkValidity();
+                setTimeout(() => {
+                    element.dispatchEvent(new Event(callbackInfo.isValid ? InputValidEvent : InputInvalidEvent));
+                }, 0);
+            });
+            let postProcessList = (element[AlpineLite.Processor.GetPostProcessorKey()] = (element[AlpineLite.Processor.GetPostProcessorKey()] || []));
+            postProcessList.push(() => {
+                element.dispatchEvent(new Event(callbackInfo.isValid ? InputValidEvent : InputInvalidEvent));
             });
             return AlpineLite.HandlerReturn.Handled;
         }
@@ -343,14 +374,20 @@ var AlpineLite;
             let map = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] = (element[AlpineLite.CoreBulkHandler.GetEventExpansionKey()] || {}));
             map['loaded'] = () => LazyLoadedEvent;
             map['lazy.loaded'] = () => LazyLoadedEvent;
-            let condition = options['condition'];
+            let condition = options['condition'], watch = (('watch' in options && options['watch'])), url = options['url'], previousUrl = null;
             if (typeof condition === 'string') {
                 AlpineLite.Proxy.Watch(condition, element, state, (value) => {
-                    if (!value) {
-                        return true;
+                    if (value) {
+                        if (previousUrl != url) {
+                            previousUrl = url;
+                            ExtendedHandler.FetchLoad(element, url);
+                        }
                     }
-                    ExtendedHandler.FetchLoad(element, options['url']);
-                    return false;
+                    else if (watch) {
+                        previousUrl = '::destroy::';
+                        ExtendedHandler.FetchLoad(element, '::destroy::');
+                    }
+                    return !watch;
                 });
             }
             else if (condition) {
