@@ -502,7 +502,7 @@ var AlpineLite;
             if (!target || targetType === 'string' || targetType === 'function' || targetType !== 'object') {
                 return null;
             }
-            if (target instanceof Node || target instanceof DOMTokenList || target instanceof ProxyNoResult || target instanceof Value) {
+            if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof Value) {
                 return null;
             }
             return new Proxy(details);

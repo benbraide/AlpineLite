@@ -285,7 +285,7 @@ export namespace AlpineLite{
                 return null;
             }
 
-            if (target instanceof Node || target instanceof DOMTokenList || target instanceof ProxyNoResult || target instanceof ValueScope.AlpineLite.Value){
+            if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof ValueScope.AlpineLite.Value){
                 return null;
             }
 
