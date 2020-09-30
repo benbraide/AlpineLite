@@ -5,6 +5,8 @@ export namespace AlpineLite{
         type: string;
         name: string;
         path: string;
+        targetName: string;
+        targetPath: string;
         exists: boolean;
         value: any;
     }

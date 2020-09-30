@@ -9,13 +9,17 @@ declare namespace AlpineLite {
     }
     export class Value {
         private callback_;
-        constructor(callback: (valueContext?: any, elementContext?: HTMLElement) => any);
-        Get(valueContext?: any, elementContext?: HTMLElement): any;
+        private silent_;
+        constructor(callback_: (proxy?: any) => any, silent_?: boolean);
+        Get(state: any, proxy?: any): any;
+        isSilent(): boolean;
     }
     export interface IChange {
         type: string;
         name: string;
         path: string;
+        targetName: string;
+        targetPath: string;
         exists: boolean;
         value: any;
     }
@@ -133,7 +137,7 @@ declare namespace AlpineLite {
         GetProxy(): object;
         GetChildProxy(name: string): Proxy;
         static Create(details: ProxyDetails): Proxy;
-        static Get(element: HTMLElement, name: string, always: boolean, state: State): any;
+        static Get(element: HTMLElement, name: string, always: boolean, state: State, proxy: Proxy): any;
         static Set(element: HTMLElement, name: string, value: any, always: boolean, state: State): boolean;
         static Delete(element: HTMLElement, name: string, state: State): boolean;
         static GetNonProxy(target: any): any;

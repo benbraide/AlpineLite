@@ -377,15 +377,18 @@ export namespace AlpineLite{
 
             let details = {
                 marker: document.createElement('x-placeholder'),
-                list: new Array<HTMLElement>(),
-                target: null
+                list: null,
+                target: null,
+                isArray: false,
+                count: null,
+                countProxy: null
             }
 
             element.parentElement.insertBefore(details.marker, element);
             element.parentElement.removeChild(element);
             
             let processor = new ProcessorScope.AlpineLite.Processor(state);
-            let insert = () => {
+            let insert = (key?: string) => {
                 let clone = (element.cloneNode(true) as HTMLElement);
                 let locals: {
                     raw: any;
@@ -410,31 +413,43 @@ export namespace AlpineLite{
                 }
                 
                 locals = clone[proxyKey];
-                locals.raw['$each'] = new ValueScope.AlpineLite.Value(() => {
-                    let getIndex = (): number => {
-                        for (let i = 0; i < details.list.length; ++i){
-                            if (details.list[i] === clone){
-                                return i;
-                            }
+                let getIndex = (): number => {
+                    for (let i = 0; i < details.list.length; ++i){
+                        if (details.list[i] === clone){
+                            return i;
                         }
+                    }
 
-                        return -1;
-                    };
-                    
+                    return -1;
+                };
+                
+                locals.raw['$each'] = new ValueScope.AlpineLite.Value(() => {
                     return {
                         count: new ValueScope.AlpineLite.Value(() => {
-                            return (details.target as Array<any>).length;
-                        }),
+                            return (details.isArray ? (details.target as Array<any>).length : details.countProxy['value']);
+                        }, true),
                         index: new ValueScope.AlpineLite.Value(() => {
-                            return getIndex();
-                        }),
+                            return (details.isArray ? getIndex() : key);
+                        }, true),
                         value: new ValueScope.AlpineLite.Value(() => {
-                            return (details.target as Array<any>)[getIndex()];
-                        })
+                            return (details.isArray ? (details.target as Array<any>)[getIndex()] : (details.target as Map<string, any>)[key]);
+                        }, true)
                     };
-                });
+                }, true);
                 
-                details.list.push(clone);
+                if (!details.isArray){
+                    let list = (details.list as Map<string, HTMLElement>);
+                    if (key in list){//Remove previous
+                        let previousClone = list[key];
+                        previousClone.parentElement.removeChild(previousClone);
+                    }
+
+                    list[key] = clone;
+                }
+                else{
+                    (details.list as Array<HTMLElement>).push(clone);
+                }
+                
                 details.marker.parentElement.insertBefore(clone, details.marker);
                 processor.All(clone);
             };
@@ -445,32 +460,81 @@ export namespace AlpineLite{
             };
 
             let build = () => {
-                for (let i = 0; i < (details.target as Array<any>).length; ++i){
-                    insert();
+                if (details.isArray){
+                    for (let i = 0; i < (details.target as Array<any>).length; ++i){
+                        insert();
+                    }
+                }
+                else{
+                    details.countProxy.value = Object.keys(details.target).length;
+                    for (let key in details.target){
+                        insert(key);
+                    }
+                }
+            };
+
+            let init = () => {
+                details.target = getValue();
+                if (Array.isArray(details.target)){
+                    details.isArray = true;
+                    details.list = new Array<HTMLElement>();
+                }
+                else if (typeof details.target === 'object'){
+                    details.isArray = false;
+                    details.list = new Map<string, HTMLElement>();
+
+                    if (!details.count){
+                        details.count = ProxyScope.AlpineLite.Proxy.Create({
+                            target: {
+                                value: 0
+                            },
+                            name: `${state.GetElementId(element)}_each_value`,
+                            parent: null,
+                            element: null,
+                            state: state
+                        });
+
+                        details.countProxy = (details.count as ProxyScope.AlpineLite.Proxy).GetProxy();
+                    }
+                }
+                else{
+                    details.list = null;
+                    details.isArray = false;
+                }
+
+                if (details.list){
+                    build();
+                    let name = (details.target.__AlpineLiteName__ as string), path = (details.target.__AlpineLitePath__ as string);
+                    state.GetChanges().AddGetAccess(name, path);
                 }
             };
 
             let purge = () => {
-                details.list.forEach((clone) => {
-                    clone.parentElement.removeChild(clone);
-                });
+                if (details.isArray){
+                    (details.list as Array<HTMLElement>).forEach((clone) => {
+                        clone.parentElement.removeChild(clone);
+                    });
 
-                details.list = new Array<HTMLElement>();
+                    details.list = new Array<HTMLElement>();
+                }
+                else{
+                    for (let key in (details.list as Map<string, HTMLElement>)){
+                        let clone = (details.list as Map<string, HTMLElement>)[key];
+                        clone.parentElement.removeChild(clone);
+                    }
+
+                    details.list = new Map<string, HTMLElement>();
+                    details.count = 0;
+                }
             };
 
             let refresh = () => {
                 purge();
-                details.target = getValue();
-                if (Array.isArray(details.target)){
-                    build();
-                }
+                init();
             };
 
             state.TrapGetAccess((change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                details.target = getValue();
-                if (Array.isArray(details.target)){
-                    build();
-                }
+                init();
             }, (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
                 if ('original' in change){//Bubbled
                     if ((change as ChangesScope.AlpineLite.IBubbledChange).isAncestor){
@@ -479,9 +543,23 @@ export namespace AlpineLite{
 
                     return;
                 }
-                
+
                 let nonBubbledChange = (change as ChangesScope.AlpineLite.IChange);
-                if (nonBubbledChange.type !== 'set' || nonBubbledChange.name !== 'length'){
+                if (!details.isArray){
+                    if (nonBubbledChange.type === 'delete'){
+                        let clone = (details.list as Map<string, HTMLElement>)[nonBubbledChange.targetName];
+                        clone.parentElement.removeChild(clone);
+                        details.countProxy.value = Object.keys(details.target).length;
+                    }
+                    else if (nonBubbledChange.type === 'set'){
+                        details.countProxy.value = Object.keys(details.target).length;
+                        insert(nonBubbledChange.targetName);
+                    }
+                    
+                    return;
+                }
+                
+                if (nonBubbledChange.type !== 'set' || nonBubbledChange.targetName !== 'length'){
                     return;
                 }
 

@@ -110,11 +110,18 @@
     </div>
     <div style="background-color: green; height: 100px; width: 100px;" x-data x-observe x-on-visible="$console.log('Visible')" x-on-hidden="$console.log('Hidden')"></div>
     <div x-data="{list: ['First', 'Second', 'Third', 'Last']}" x-each="list">
-        <span>Value: </span><span x-text="$each.value"></span> | 
         <span>Index: </span><span x-text="$each.index"></span> | 
+        <span>Value: </span><span x-text="$each.value"></span> | 
         <span>Count: </span><span x-text="$each.count"></span>
     </div>
-    <div x-data x-init="$console.log($state, $changes)">
+    <div style="margin-top: 10px;">
+        <div x-data="{list: {name: 'Anon Legion', email: 'anon.legion@crypt.co', age: 27, sex: 'MALE'}}" x-each="list">
+            <span>Index: </span><span x-text="$each.index"></span> | 
+            <span>Value: </span><span x-text="$each.value"></span> | 
+            <span>Count: </span><span x-text="$each.count"></span>
+        </div>
+    </div>
+    <div style="margin-top: 10px;" x-data x-init="$console.log($state, $changes)">
         <span>Root Name:</span><span x-text="$proxy.GetPath()"></span>
     </div>
     <script src="./dist/Bundle.js"></script>

@@ -1,13 +1,13 @@
 export namespace AlpineLite{
     export class Value{
-        private callback_: (valueContext?: any, elementContext?: HTMLElement) => any;
+        constructor(private callback_: (proxy?: any) => any, private silent_: boolean = true){}
 
-        constructor(callback: (valueContext?: any, elementContext?: HTMLElement) => any){
-            this.callback_ = callback;
+        public Get(state: any, proxy?: any): any{
+            return this.callback_(proxy);
         }
 
-        public Get(valueContext?: any, elementContext?: HTMLElement): any{
-            return this.callback_(valueContext, elementContext);
+        public isSilent(): boolean{
+            return this.silent_;
         }
     }
 }

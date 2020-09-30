@@ -24,14 +24,14 @@ namespace AlpineLite{
 
     //Value begin
     export class Value{
-        private callback_: (valueContext?: any, elementContext?: HTMLElement) => any;
+        constructor(private callback_: (proxy?: any) => any, private silent_: boolean = true){}
 
-        constructor(callback: (valueContext?: any, elementContext?: HTMLElement) => any){
-            this.callback_ = callback;
+        public Get(state: any, proxy?: any): any{
+            return this.callback_(proxy);
         }
 
-        public Get(valueContext?: any, elementContext?: HTMLElement): any{
-            return this.callback_(valueContext, elementContext);
+        public isSilent(): boolean{
+            return this.silent_;
         }
     }
     
@@ -40,6 +40,8 @@ namespace AlpineLite{
         type: string;
         name: string;
         path: string;
+        targetName: string;
+        targetPath: string;
         exists: boolean;
         value: any;
     }
@@ -456,6 +458,10 @@ namespace AlpineLite{
                     }
                     
                     let name = prop.toString();
+                    if (name === '__AlpineLiteSelf__'){
+                        return self;
+                    }
+                    
                     if (name === '__AlpineLiteTarget__'){
                         return target;
                     }
@@ -464,21 +470,34 @@ namespace AlpineLite{
                         return self.GetPath();
                     }
 
-                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
-                    let keyResult = Proxy.HandleSpecialKey(name, self);
+                    if (name === '__AlpineLiteName__'){
+                        return self.details_.name;
+                    }
+
+                    let keyResult: any;
+                    try{
+                        self.details_.state.GetChanges().PushGetAccessStorage(null);//Disable get access log
+                        keyResult = Proxy.HandleSpecialKey(name, self);
+                    }
+                    finally{
+                        self.details_.state.GetChanges().PopGetAccessStorage();
+                    }
 
                     if (!(keyResult instanceof ProxyNoResult)){//Value returned
                         return Proxy.ResolveValue(keyResult, self);
                     }
-                    
+
+                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     if (element && !self.details_.element && !(prop in target)){
-                        let value = Proxy.Get(element, name, false, self.details_.state);
+                        let value = Proxy.Get(element, name, false, self.details_.state, self);
                         if (!(value instanceof ProxyNoResult)){//Value returned
                             return Proxy.ResolveValue(value, self);
                         }
                     }
 
-                    let baseValue = Proxy.ResolveValue(((prop in target) ? Reflect.get(target, prop) : null), self);
+                    let actualValue = ((prop in target) ? Reflect.get(target, prop) : null);
+                    let baseValue = Proxy.ResolveValue(actualValue, self);
+
                     let value = Proxy.Create({
                         target: baseValue,
                         name: name,
@@ -488,7 +507,7 @@ namespace AlpineLite{
                     });
 
                     let changes = self.details_.state?.GetChanges();
-                    if (changes){
+                    if (changes && (!(actualValue instanceof Value) || !(actualValue as Value).isSilent())){
                         changes.AddGetAccess(name, self.GetPath(name));
                     }
 
@@ -533,11 +552,9 @@ namespace AlpineLite{
                         return true;
                     }
 
-                    if (self.details_.parent){
-                        self.details_.parent.Alert_('delete', self.details_.name, exists, { name: prop, value: target[prop] }, false);
-                    }
-
+                    self.Alert_('delete', prop.toString(), exists, target[prop], false);
                     delete target[prop];
+
                     if (prop in self.proxies_){
                         self.proxies_[prop].details_.parent = null;
                         delete self.proxies_[prop];
@@ -561,10 +578,13 @@ namespace AlpineLite{
                 return;
             }
             
+            let path = this.GetPath();
             let change : IChange = {
                 type: type,
-                name: name,
-                path: this.GetPath(name),
+                name: this.details_.name,
+                path: path,
+                targetName: name,
+                targetPath: `${path}.${name}`,
                 exists: exists,
                 value: value
             }
@@ -579,7 +599,16 @@ namespace AlpineLite{
             }
 
             if (alertChildren){
-                this.AlertChildren_(change);
+                changes.Add({
+                    original: change,
+                    name: name,
+                    path: `${path}.${name}`,
+                    isAncestor: true
+                });
+
+                if (name in this.proxies_){
+                    this.proxies_[name].AlertChildren_(change);
+                }
             }
         }
 
@@ -670,6 +699,10 @@ namespace AlpineLite{
                 return null;
             }
 
+            if ('__AlpineLiteSelf__' in details.target){
+                return details.target['__AlpineLiteSelf__'];
+            }
+
             if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof Value){
                 return null;
             }
@@ -681,7 +714,7 @@ namespace AlpineLite{
             return new Proxy(details);
         }
 
-        public static Get(element: HTMLElement, name: string, always: boolean, state: State): any{
+        public static Get(element: HTMLElement, name: string, always: boolean, state: State, proxy: Proxy): any{
             if (!element){
                 return new ProxyNoResult();
             }
@@ -691,23 +724,26 @@ namespace AlpineLite{
             let changes = state?.GetChanges();
 
             if (initialized && (name in element[pk].raw)){
+                let actualValue = element[pk].raw[name];
+                let baseValue = Proxy.ResolveValue(actualValue, proxy);
+                
                 let value = Proxy.Create({
-                    target: element[pk].raw[name],
+                    target: baseValue,
                     name: name,
                     parent: element[pk].proxy,
                     element: null,
                     state: state
                 });
 
-                if (changes){
+                if (changes && (!(actualValue instanceof Value) || !(actualValue as Value).isSilent())){
                     changes.AddGetAccess(name, element[pk].proxy.GetPath(name));
                 }
 
-                if (value === null){
-                    return element[pk].raw[name];
+                if (value){
+                    return value.proxy_;
                 }
                 
-                return value;
+                return actualValue;
             }
 
             let value: any;
@@ -715,7 +751,7 @@ namespace AlpineLite{
                 value = new ProxyNoResult();
             }
             else{
-                value = Proxy.Get(element.parentElement, name, false, state);
+                value = Proxy.Get(element.parentElement, name, false, state, proxy);
             }
 
             if (!always || !(value instanceof ProxyNoResult)){//Value returned or 'always' disabled
@@ -812,9 +848,7 @@ namespace AlpineLite{
                 let raw = element[pk].raw;
                 let proxy = (element[pk].proxy as Proxy);
 
-                if (proxy.details_.parent){
-                    proxy.details_.parent.Alert_('delete', proxy.details_.name, true, { name: name, value: raw[name] }, false);
-                }
+                (element[pk].proxy as Proxy).Alert_('set', name, true, raw[name], false);
 
                 delete proxy[name];
                 delete raw[name];
@@ -851,7 +885,7 @@ namespace AlpineLite{
                 return value;
             }
             
-            let baseValue = (value as Value).Get();
+            let baseValue = (value as Value).Get(proxy.details_.state, proxy);
             let proxyValue = Proxy.Create({
                 target: baseValue,
                 name: name,
@@ -2373,15 +2407,18 @@ namespace AlpineLite{
 
             let details = {
                 marker: document.createElement('x-placeholder'),
-                list: new Array<HTMLElement>(),
-                target: null
+                list: null,
+                target: null,
+                isArray: false,
+                count: null,
+                countProxy: null
             }
 
             element.parentElement.insertBefore(details.marker, element);
             element.parentElement.removeChild(element);
             
             let processor = new Processor(state);
-            let insert = () => {
+            let insert = (key?: string) => {
                 let clone = (element.cloneNode(true) as HTMLElement);
                 let locals: {
                     raw: any;
@@ -2406,31 +2443,43 @@ namespace AlpineLite{
                 }
                 
                 locals = clone[proxyKey];
-                locals.raw['$each'] = new Value(() => {
-                    let getIndex = (): number => {
-                        for (let i = 0; i < details.list.length; ++i){
-                            if (details.list[i] === clone){
-                                return i;
-                            }
+                let getIndex = (): number => {
+                    for (let i = 0; i < details.list.length; ++i){
+                        if (details.list[i] === clone){
+                            return i;
                         }
+                    }
 
-                        return -1;
-                    };
-                    
+                    return -1;
+                };
+
+                locals.raw['$each'] = new Value(() => {
                     return {
                         count: new Value(() => {
-                            return (details.target as Array<any>).length;
-                        }),
+                            return (details.isArray ? (details.target as Array<any>).length : details.countProxy['value']);
+                        }, true),
                         index: new Value(() => {
-                            return getIndex();
-                        }),
+                            return (details.isArray ? getIndex() : key);
+                        }, true),
                         value: new Value(() => {
-                            return (details.target as Array<any>)[getIndex()];
-                        })
+                            return (details.isArray ? (details.target as Array<any>)[getIndex()] : (details.target as Map<string, any>)[key]);
+                        }, true)
                     };
-                });
+                }, true);
                 
-                details.list.push(clone);
+                if (!details.isArray){
+                    let list = (details.list as Map<string, HTMLElement>);
+                    if (key in list){//Remove previous
+                        let previousClone = list[key];
+                        previousClone.parentElement.removeChild(previousClone);
+                    }
+
+                    list[key] = clone;
+                }
+                else{
+                    (details.list as Array<HTMLElement>).push(clone);
+                }
+                
                 details.marker.parentElement.insertBefore(clone, details.marker);
                 processor.All(clone);
             };
@@ -2441,32 +2490,81 @@ namespace AlpineLite{
             };
 
             let build = () => {
-                for (let i = 0; i < (details.target as Array<any>).length; ++i){
-                    insert();
+                if (details.isArray){
+                    for (let i = 0; i < (details.target as Array<any>).length; ++i){
+                        insert();
+                    }
+                }
+                else{
+                    details.countProxy.value = Object.keys(details.target).length;
+                    for (let key in details.target){
+                        insert(key);
+                    }
+                }
+            };
+
+            let init = () => {
+                details.target = getValue();
+                if (Array.isArray(details.target)){
+                    details.isArray = true;
+                    details.list = new Array<HTMLElement>();
+                }
+                else if (typeof details.target === 'object'){
+                    details.isArray = false;
+                    details.list = new Map<string, HTMLElement>();
+
+                    if (!details.count){
+                        details.count = Proxy.Create({
+                            target: {
+                                value: 0
+                            },
+                            name: `${state.GetElementId(element)}_each_value`,
+                            parent: null,
+                            element: null,
+                            state: state
+                        });
+
+                        details.countProxy = (details.count as Proxy).GetProxy();
+                    }
+                }
+                else{
+                    details.list = null;
+                    details.isArray = false;
+                }
+
+                if (details.list){
+                    build();
+                    let name = (details.target.__AlpineLiteName__ as string), path = (details.target.__AlpineLitePath__ as string);
+                    state.GetChanges().AddGetAccess(name, path);
                 }
             };
 
             let purge = () => {
-                details.list.forEach((clone) => {
-                    clone.parentElement.removeChild(clone);
-                });
+                if (details.isArray){
+                    (details.list as Array<HTMLElement>).forEach((clone) => {
+                        clone.parentElement.removeChild(clone);
+                    });
 
-                details.list = new Array<HTMLElement>();
+                    details.list = new Array<HTMLElement>();
+                }
+                else{
+                    for (let key in (details.list as Map<string, HTMLElement>)){
+                        let clone = (details.list as Map<string, HTMLElement>)[key];
+                        clone.parentElement.removeChild(clone);
+                    }
+
+                    details.list = new Map<string, HTMLElement>();
+                    details.count = 0;
+                }
             };
 
             let refresh = () => {
                 purge();
-                details.target = getValue();
-                if (Array.isArray(details.target)){
-                    build();
-                }
+                init();
             };
 
             state.TrapGetAccess((change: IChange | IBubbledChange): void => {
-                details.target = getValue();
-                if (Array.isArray(details.target)){
-                    build();
-                }
+                init();
             }, (change: IChange | IBubbledChange): void => {
                 if ('original' in change){//Bubbled
                     if ((change as IBubbledChange).isAncestor){
@@ -2475,9 +2573,23 @@ namespace AlpineLite{
 
                     return;
                 }
-                
+
                 let nonBubbledChange = (change as IChange);
-                if (nonBubbledChange.type !== 'set' || nonBubbledChange.name !== 'length'){
+                if (!details.isArray){
+                    if (nonBubbledChange.type === 'delete'){
+                        let clone = (details.list as Map<string, HTMLElement>)[nonBubbledChange.targetName];
+                        clone.parentElement.removeChild(clone);
+                        details.countProxy.value = Object.keys(details.target).length;
+                    }
+                    else if (nonBubbledChange.type === 'set'){
+                        details.countProxy.value = Object.keys(details.target).length;
+                        insert(nonBubbledChange.targetName);
+                    }
+                    
+                    return;
+                }
+                
+                if (nonBubbledChange.type !== 'set' || nonBubbledChange.targetName !== 'length'){
                     return;
                 }
 

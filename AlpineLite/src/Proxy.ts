@@ -71,6 +71,10 @@ export namespace AlpineLite{
                     }
                     
                     let name = prop.toString();
+                    if (name === '__AlpineLiteSelf__'){
+                        return self;
+                    }
+                    
                     if (name === '__AlpineLiteTarget__'){
                         return target;
                     }
@@ -79,21 +83,34 @@ export namespace AlpineLite{
                         return self.GetPath();
                     }
 
-                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
-                    let keyResult = Proxy.HandleSpecialKey(name, self);
+                    if (name === '__AlpineLiteName__'){
+                        return self.details_.name;
+                    }
+
+                    let keyResult: any;
+                    try{
+                        self.details_.state.GetChanges().PushGetAccessStorage(null);//Disable get access log
+                        keyResult = Proxy.HandleSpecialKey(name, self);
+                    }
+                    finally{
+                        self.details_.state.GetChanges().PopGetAccessStorage();
+                    }
 
                     if (!(keyResult instanceof ProxyNoResult)){//Value returned
                         return Proxy.ResolveValue(keyResult, self);
                     }
                     
+                    let element = (self.details_.restricted ? self.details_.element : self.GetContextElement());
                     if (element && !self.details_.element && !(prop in target)){
-                        let value = Proxy.Get(element, name, false, self.details_.state);
+                        let value = Proxy.Get(element, name, false, self.details_.state, self);
                         if (!(value instanceof ProxyNoResult)){//Value returned
                             return Proxy.ResolveValue(value, self);
                         }
                     }
 
-                    let baseValue = Proxy.ResolveValue(((prop in target) ? Reflect.get(target, prop) : null), self);
+                    let actualValue = ((prop in target) ? Reflect.get(target, prop) : null);
+                    let baseValue = Proxy.ResolveValue(actualValue, self);
+
                     let value = Proxy.Create({
                         target: baseValue,
                         name: name,
@@ -103,7 +120,7 @@ export namespace AlpineLite{
                     });
 
                     let changes = self.details_.state?.GetChanges();
-                    if (changes){
+                    if (changes && (!(actualValue instanceof ValueScope.AlpineLite.Value) || !(actualValue as ValueScope.AlpineLite.Value).isSilent())){
                         changes.AddGetAccess(name, self.GetPath(name));
                     }
 
@@ -148,11 +165,9 @@ export namespace AlpineLite{
                         return true;
                     }
 
-                    if (self.details_.parent){
-                        self.details_.parent.Alert_('delete', self.details_.name, exists, { name: prop, value: target[prop] }, false);
-                    }
-
+                    self.Alert_('delete', prop.toString(), exists, target[prop], false);
                     delete target[prop];
+
                     if (prop in self.proxies_){
                         self.proxies_[prop].details_.parent = null;
                         delete self.proxies_[prop];
@@ -176,10 +191,13 @@ export namespace AlpineLite{
                 return;
             }
             
+            let path = this.GetPath();
             let change : ChangesScope.AlpineLite.IChange = {
                 type: type,
-                name: name,
-                path: this.GetPath(name),
+                name: this.details_.name,
+                path: path,
+                targetName: name,
+                targetPath: `${path}.${name}`,
                 exists: exists,
                 value: value
             }
@@ -194,7 +212,16 @@ export namespace AlpineLite{
             }
 
             if (alertChildren){
-                this.AlertChildren_(change);
+                changes.Add({
+                    original: change,
+                    name: name,
+                    path: `${path}.${name}`,
+                    isAncestor: true
+                });
+
+                if (name in this.proxies_){
+                    this.proxies_[name].AlertChildren_(change);
+                }
             }
         }
 
@@ -285,6 +312,10 @@ export namespace AlpineLite{
                 return null;
             }
 
+            if ('__AlpineLiteSelf__' in details.target){
+                return details.target['__AlpineLiteSelf__'];
+            }
+
             if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof ValueScope.AlpineLite.Value){
                 return null;
             }
@@ -296,7 +327,7 @@ export namespace AlpineLite{
             return new Proxy(details);
         }
 
-        public static Get(element: HTMLElement, name: string, always: boolean, state: StateScope.AlpineLite.State): any{
+        public static Get(element: HTMLElement, name: string, always: boolean, state: StateScope.AlpineLite.State, proxy: Proxy): any{
             if (!element){
                 return new ProxyNoResult();
             }
@@ -306,23 +337,26 @@ export namespace AlpineLite{
             let changes = state?.GetChanges();
 
             if (initialized && (name in element[pk].raw)){
+                let actualValue = element[pk].raw[name];
+                let baseValue = Proxy.ResolveValue(actualValue, proxy);
+                
                 let value = Proxy.Create({
-                    target: element[pk].raw[name],
+                    target: baseValue,
                     name: name,
                     parent: element[pk].proxy,
                     element: null,
                     state: state
                 });
 
-                if (changes){
+                if (changes && (!(actualValue instanceof ValueScope.AlpineLite.Value) || !(actualValue as ValueScope.AlpineLite.Value).isSilent())){
                     changes.AddGetAccess(name, element[pk].proxy.GetPath(name));
                 }
 
-                if (value === null){
-                    return element[pk].raw[name];
+                if (value){
+                    return value.proxy_;
                 }
                 
-                return value;
+                return actualValue;
             }
 
             let value: any;
@@ -330,7 +364,7 @@ export namespace AlpineLite{
                 value = new ProxyNoResult();
             }
             else{
-                value = Proxy.Get(element.parentElement, name, false, state);
+                value = Proxy.Get(element.parentElement, name, false, state, proxy);
             }
 
             if (!always || !(value instanceof ProxyNoResult)){//Value returned or 'always' disabled
@@ -427,10 +461,8 @@ export namespace AlpineLite{
                 let raw = element[pk].raw;
                 let proxy = (element[pk].proxy as Proxy);
 
-                if (proxy.details_.parent){
-                    proxy.details_.parent.Alert_('delete', proxy.details_.name, true, { name: name, value: raw[name] }, false);
-                }
-
+                (element[pk].proxy as Proxy).Alert_('set', name, true, raw[name], false);
+                
                 delete proxy[name];
                 delete raw[name];
 
@@ -466,7 +498,7 @@ export namespace AlpineLite{
                 return value;
             }
             
-            let baseValue = (value as ValueScope.AlpineLite.Value).Get();
+            let baseValue = (value as ValueScope.AlpineLite.Value).Get(proxy.details_.state, proxy);
             let proxyValue = Proxy.Create({
                 target: baseValue,
                 name: name,
