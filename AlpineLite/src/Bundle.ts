@@ -70,6 +70,7 @@ namespace AlpineLite{
         private listeners_: Record<string, Array<ChangeCallbackInfo>> = {};
         private list_ = new Array<IChange | IBubbledChange>();
         private getAccessStorage_ = new Stack<GetAccessStorage>();
+        private lastGetAccessPath_ = new Stack<string>();
         private isScheduled_: boolean = false;
 
         private Schedule_(): void{
@@ -104,12 +105,24 @@ namespace AlpineLite{
 
         public AddGetAccess(name: string, path: string): void{
             let storage = this.getAccessStorage_.Peek();
-            if (storage){
-                storage[path] = {
-                    name: name,
-                    ref: this
-                };
+            if (!storage){
+                return;
             }
+            
+            let lastGetAccessPath = this.lastGetAccessPath_.Peek();
+            if (lastGetAccessPath !== null){
+                if (path == `${lastGetAccessPath}.${name}`){//Deeper access
+                    delete storage[lastGetAccessPath];
+                }
+
+                this.lastGetAccessPath_.Pop();
+            }
+
+            this.lastGetAccessPath_.Push(path);
+            storage[path] = {
+                name: name,
+                ref: this
+            };
         }
 
         public AddListener(path: string, callback: ChangeCallbackType, element?: HTMLElement, key?: string): void{
@@ -158,9 +171,11 @@ namespace AlpineLite{
 
         public PushGetAccessStorage(storage: GetAccessStorage): void{
             this.getAccessStorage_.Push(storage);
+            this.lastGetAccessPath_.Push('');
         }
 
         public PopGetAccessStorage(): GetAccessStorage{
+            this.lastGetAccessPath_.Pop();
             return this.getAccessStorage_.Pop();
         }
 
@@ -180,9 +195,9 @@ namespace AlpineLite{
     }
     
     interface ExternalCallbacks{
-        componentFinder?: (id: string) => any;
-        isEqual?: (first: any, second: any) => boolean;
-        deepCopy?: (target: any) => any;
+        componentFinder?: (id: string, state: any) => any;
+        isEqual?: (first: any, second: any, state: any) => boolean;
+        deepCopy?: (target: any, state: any) => any;
     }
     
     //State begin
@@ -201,15 +216,15 @@ namespace AlpineLite{
         }
 
         public FindComponent(id: string): any{
-            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id) : null);
+            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id, this) : null);
         }
 
         public IsEqual(first: any, second: any): boolean{
-            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second) : (first === second));
+            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second, this) : (first === second));
         }
 
         public DeepCopy(target: any): any{
-            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target) : target);
+            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target, this) : target);
         }
 
         public GenerateElementId(): number{
@@ -318,9 +333,8 @@ namespace AlpineLite{
         }
 
         public TrapGetAccess(callback: ChangeCallbackType, changeCallback?: ChangeCallbackType | boolean, element?: HTMLElement, key?: string): void{
-            let getAccessStorage: GetAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)){//Listen for get events
-                this.changes_.PushGetAccessStorage(getAccessStorage);
+                this.changes_.PushGetAccessStorage({});
             }
 
             try{
@@ -334,7 +348,7 @@ namespace AlpineLite{
                 return;
             }
             
-            this.changes_.PopGetAccessStorage();//Stop listening for get events
+            let getAccessStorage = this.changes_.PopGetAccessStorage();//Stop listening for get events
             let paths = Object.keys(getAccessStorage);
 
             if (paths.length == 0){
@@ -342,9 +356,8 @@ namespace AlpineLite{
             }
 
             let onChange = (change: IChange | IBubbledChange): void => {
-                let newGetAccessStorage: GetAccessStorage = {};
                 try{
-                    this.changes_.PushGetAccessStorage(newGetAccessStorage);
+                    this.changes_.PushGetAccessStorage({});
                     if (changeCallback === true){
                         callback(change);
                     }
@@ -356,7 +369,7 @@ namespace AlpineLite{
                    this.ReportError(err, 'AlpineLine.State.TrapAccess.onChange');
                 }
 
-                this.changes_.PopGetAccessStorage();//Stop listening for get events
+                let newGetAccessStorage = this.changes_.PopGetAccessStorage();//Stop listening for get events
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
                         getAccessStorage[path] = newGetAccessStorage[path];
@@ -658,6 +671,10 @@ namespace AlpineLite{
             }
 
             if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof Value){
+                return null;
+            }
+
+            if (target instanceof Changes || target instanceof State || target instanceof Proxy){
                 return null;
             }
 
@@ -1215,6 +1232,24 @@ namespace AlpineLite{
                     let component = (proxy.details_.state.FindComponent(id) as Proxy);
                     return (component ? component.GetProxy() : null);
                 };
+            });
+
+            addRootKey('proxy', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy;
+                });
+            });
+
+            addRootKey('state', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.details_.state;
+                });
+            });
+
+            addRootKey('changes', (proxy: Proxy): any => {
+                return new Value(() => {
+                    return proxy.details_.state.GetChanges();
+                });
             });
 
             addRootKey('get', (proxy: Proxy): any => {
@@ -2515,8 +2550,14 @@ namespace AlpineLite{
         constructor(externalCallbacks: ExternalCallbacks){
             this.externalCallbacks_ = (externalCallbacks || {});
             if (!this.externalCallbacks_.componentFinder){
-                this.externalCallbacks_.componentFinder = (id: string): any => {
+                this.externalCallbacks_.componentFinder = (id: string, state: any): any => {
                     if (!id){
+                        for (let i = 0; i < this.dataRegions_.length; ++i){
+                            if (this.dataRegions_[i].state === state){
+                                return this.dataRegions_[i].data;
+                            }
+                        }
+
                         return null;
                     }
                     

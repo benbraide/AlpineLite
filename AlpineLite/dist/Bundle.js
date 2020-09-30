@@ -37,6 +37,7 @@ var AlpineLite;
             this.listeners_ = {};
             this.list_ = new Array();
             this.getAccessStorage_ = new Stack();
+            this.lastGetAccessPath_ = new Stack();
             this.isScheduled_ = false;
         }
         Schedule_() {
@@ -66,12 +67,21 @@ var AlpineLite;
         }
         AddGetAccess(name, path) {
             let storage = this.getAccessStorage_.Peek();
-            if (storage) {
-                storage[path] = {
-                    name: name,
-                    ref: this
-                };
+            if (!storage) {
+                return;
             }
+            let lastGetAccessPath = this.lastGetAccessPath_.Peek();
+            if (lastGetAccessPath !== null) {
+                if (path == `${lastGetAccessPath}.${name}`) { //Deeper access
+                    delete storage[lastGetAccessPath];
+                }
+                this.lastGetAccessPath_.Pop();
+            }
+            this.lastGetAccessPath_.Push(path);
+            storage[path] = {
+                name: name,
+                ref: this
+            };
         }
         AddListener(path, callback, element, key) {
             if (!(path in this.listeners_)) {
@@ -113,8 +123,10 @@ var AlpineLite;
         }
         PushGetAccessStorage(storage) {
             this.getAccessStorage_.Push(storage);
+            this.lastGetAccessPath_.Push('');
         }
         PopGetAccessStorage() {
+            this.lastGetAccessPath_.Pop();
             return this.getAccessStorage_.Pop();
         }
         RetrieveGetAccessStorage() {
@@ -144,13 +156,13 @@ var AlpineLite;
             });
         }
         FindComponent(id) {
-            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id) : null);
+            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id, this) : null);
         }
         IsEqual(first, second) {
-            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second) : (first === second));
+            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second, this) : (first === second));
         }
         DeepCopy(target) {
-            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target) : target);
+            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target, this) : target);
         }
         GenerateElementId() {
             return ++this.elementId_;
@@ -233,9 +245,8 @@ var AlpineLite;
             }
         }
         TrapGetAccess(callback, changeCallback, element, key) {
-            let getAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)) { //Listen for get events
-                this.changes_.PushGetAccessStorage(getAccessStorage);
+                this.changes_.PushGetAccessStorage({});
             }
             try {
                 callback(null);
@@ -246,15 +257,14 @@ var AlpineLite;
             if (!changeCallback || this.GetFlag(StateFlag.StaticBind)) {
                 return;
             }
-            this.changes_.PopGetAccessStorage(); //Stop listening for get events
+            let getAccessStorage = this.changes_.PopGetAccessStorage(); //Stop listening for get events
             let paths = Object.keys(getAccessStorage);
             if (paths.length == 0) {
                 return;
             }
             let onChange = (change) => {
-                let newGetAccessStorage = {};
                 try {
-                    this.changes_.PushGetAccessStorage(newGetAccessStorage);
+                    this.changes_.PushGetAccessStorage({});
                     if (changeCallback === true) {
                         callback(change);
                     }
@@ -265,7 +275,7 @@ var AlpineLite;
                 catch (err) {
                     this.ReportError(err, 'AlpineLine.State.TrapAccess.onChange');
                 }
-                this.changes_.PopGetAccessStorage(); //Stop listening for get events
+                let newGetAccessStorage = this.changes_.PopGetAccessStorage(); //Stop listening for get events
                 Object.keys(newGetAccessStorage).forEach((path) => {
                     if (!(path in getAccessStorage)) { //New path
                         getAccessStorage[path] = newGetAccessStorage[path];
@@ -503,6 +513,9 @@ var AlpineLite;
                 return null;
             }
             if (target instanceof Node || target instanceof DOMTokenList || target instanceof Event || target instanceof ProxyNoResult || target instanceof Value) {
+                return null;
+            }
+            if (target instanceof Changes || target instanceof State || target instanceof Proxy) {
                 return null;
             }
             return new Proxy(details);
@@ -951,6 +964,21 @@ var AlpineLite;
                     let component = proxy.details_.state.FindComponent(id);
                     return (component ? component.GetProxy() : null);
                 };
+            });
+            addRootKey('proxy', (proxy) => {
+                return new Value(() => {
+                    return proxy;
+                });
+            });
+            addRootKey('state', (proxy) => {
+                return new Value(() => {
+                    return proxy.details_.state;
+                });
+            });
+            addRootKey('changes', (proxy) => {
+                return new Value(() => {
+                    return proxy.details_.state.GetChanges();
+                });
             });
             addRootKey('get', (proxy) => {
                 return (prop, component) => {
@@ -2007,8 +2035,13 @@ var AlpineLite;
             this.dataRegions_ = new Array();
             this.externalCallbacks_ = (externalCallbacks || {});
             if (!this.externalCallbacks_.componentFinder) {
-                this.externalCallbacks_.componentFinder = (id) => {
+                this.externalCallbacks_.componentFinder = (id, state) => {
                     if (!id) {
+                        for (let i = 0; i < this.dataRegions_.length; ++i) {
+                            if (this.dataRegions_[i].state === state) {
+                                return this.dataRegions_[i].data;
+                            }
+                        }
                         return null;
                     }
                     for (let i = 0; i < this.dataRegions_.length; ++i) {

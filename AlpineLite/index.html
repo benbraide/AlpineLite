@@ -114,6 +114,9 @@
         <span>Index: </span><span x-text="$each.index"></span> | 
         <span>Count: </span><span x-text="$each.count"></span>
     </div>
+    <div x-data x-init="$console.log($state, $changes)">
+        <span>Root Name:</span><span x-text="$proxy.GetPath()"></span>
+    </div>
     <script src="./dist/Bundle.js"></script>
     <script src="./dist/ScrollTop.js"></script>
     <script src="./dist/ExtendedHandler.js"></script>

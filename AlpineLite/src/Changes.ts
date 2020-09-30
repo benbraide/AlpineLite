@@ -34,6 +34,7 @@ export namespace AlpineLite{
         private listeners_: Record<string, Array<ChangeCallbackInfo>> = {};
         private list_ = new Array<IChange | IBubbledChange>();
         private getAccessStorage_ = new StackScope.AlpineLite.Stack<GetAccessStorage>();
+        private lastGetAccessPath_ = new StackScope.AlpineLite.Stack<string>();
         private isScheduled_: boolean = false;
 
         private Schedule_(): void{
@@ -68,12 +69,24 @@ export namespace AlpineLite{
 
         public AddGetAccess(name: string, path: string): void{
             let storage = this.getAccessStorage_.Peek();
-            if (storage){
-                storage[path] = {
-                    name: name,
-                    ref: this
-                };
+            if (!storage){
+                return;
             }
+            
+            let lastGetAccessPath = this.lastGetAccessPath_.Peek();
+            if (lastGetAccessPath !== null){
+                if (path == `${lastGetAccessPath}.${name}`){//Deeper access
+                    delete storage[lastGetAccessPath];
+                }
+
+                this.lastGetAccessPath_.Pop();
+            }
+
+            this.lastGetAccessPath_.Push(path);
+            storage[path] = {
+                name: name,
+                ref: this
+            };
         }
 
         public AddListener(path: string, callback: ChangeCallbackType, element?: HTMLElement, key?: string): void{
@@ -122,9 +135,11 @@ export namespace AlpineLite{
 
         public PushGetAccessStorage(storage: GetAccessStorage): void{
             this.getAccessStorage_.Push(storage);
+            this.lastGetAccessPath_.Push('');
         }
 
         public PopGetAccessStorage(): GetAccessStorage{
+            this.lastGetAccessPath_.Pop();
             return this.getAccessStorage_.Pop();
         }
 

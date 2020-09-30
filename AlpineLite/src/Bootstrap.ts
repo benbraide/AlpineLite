@@ -23,8 +23,14 @@ export namespace AlpineLite{
         constructor(externalCallbacks: StateScope.AlpineLite.ExternalCallbacks){
             this.externalCallbacks_ = (externalCallbacks || {});
             if (!this.externalCallbacks_.componentFinder){
-                this.externalCallbacks_.componentFinder = (id: string): any => {
+                this.externalCallbacks_.componentFinder = (id: string, state: any): any => {
                     if (!id){
+                        for (let i = 0; i < this.dataRegions_.length; ++i){
+                            if (this.dataRegions_[i].state === state){
+                                return this.dataRegions_[i].data;
+                            }
+                        }
+
                         return null;
                     }
                     

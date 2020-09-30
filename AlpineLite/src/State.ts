@@ -13,9 +13,9 @@ export namespace AlpineLite{
     }
 
     export interface ExternalCallbacks{
-        componentFinder?: (id: string) => any;
-        isEqual?: (first: any, second: any) => boolean;
-        deepCopy?: (target: any) => any;
+        componentFinder?: (id: string, state: any) => any;
+        isEqual?: (first: any, second: any, state: any) => boolean;
+        deepCopy?: (target: any, state: any) => any;
     }
     
     export class State{
@@ -33,15 +33,15 @@ export namespace AlpineLite{
         }
 
         public FindComponent(id: string): any{
-            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id) : null);
+            return (this.externalCallbacks_.componentFinder ? this.externalCallbacks_.componentFinder(id, this) : null);
         }
 
         public IsEqual(first: any, second: any): boolean{
-            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second) : (first === second));
+            return (this.externalCallbacks_.isEqual ? this.externalCallbacks_.isEqual(first, second, this) : (first === second));
         }
 
         public DeepCopy(target: any): any{
-            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target) : target);
+            return (this.externalCallbacks_.deepCopy ? this.externalCallbacks_.deepCopy(target, this) : target);
         }
 
         public GenerateElementId(): number{
@@ -150,9 +150,8 @@ export namespace AlpineLite{
         }
 
         public TrapGetAccess(callback: ChangesScope.AlpineLite.ChangeCallbackType, changeCallback?: ChangesScope.AlpineLite.ChangeCallbackType | boolean, element?: HTMLElement, key?: string): void{
-            let getAccessStorage: ChangesScope.AlpineLite.GetAccessStorage = {};
             if (changeCallback && !this.GetFlag(StateFlag.StaticBind)){//Listen for get events
-                this.changes_.PushGetAccessStorage(getAccessStorage);
+                this.changes_.PushGetAccessStorage({});
             }
 
             try{
@@ -166,7 +165,7 @@ export namespace AlpineLite{
                 return;
             }
             
-            this.changes_.PopGetAccessStorage();//Stop listening for get events
+            let getAccessStorage = this.changes_.PopGetAccessStorage();//Stop listening for get events
             let paths = Object.keys(getAccessStorage);
 
             if (paths.length == 0){
@@ -174,9 +173,8 @@ export namespace AlpineLite{
             }
 
             let onChange = (change: ChangesScope.AlpineLite.IChange | ChangesScope.AlpineLite.IBubbledChange): void => {
-                let newGetAccessStorage: ChangesScope.AlpineLite.GetAccessStorage = {};
                 try{
-                    this.changes_.PushGetAccessStorage(newGetAccessStorage);
+                    this.changes_.PushGetAccessStorage({});
                     if (changeCallback === true){
                         callback(change);
                     }
@@ -188,7 +186,7 @@ export namespace AlpineLite{
                    this.ReportError(err, 'AlpineLine.State.TrapAccess.onChange');
                 }
 
-                this.changes_.PopGetAccessStorage();//Stop listening for get events
+                let newGetAccessStorage = this.changes_.PopGetAccessStorage();//Stop listening for get events
                 Object.keys(newGetAccessStorage).forEach((path: string): void => {//Listen for changes on accessed paths
                     if (!(path in getAccessStorage)){//New path
                         getAccessStorage[path] = newGetAccessStorage[path];

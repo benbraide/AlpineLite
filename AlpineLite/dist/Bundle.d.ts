@@ -35,6 +35,7 @@ declare namespace AlpineLite {
         private listeners_;
         private list_;
         private getAccessStorage_;
+        private lastGetAccessPath_;
         private isScheduled_;
         private Schedule_;
         Add(item: IChange | IBubbledChange): void;
@@ -51,9 +52,9 @@ declare namespace AlpineLite {
         DebugEnabled = 1
     }
     interface ExternalCallbacks {
-        componentFinder?: (id: string) => any;
-        isEqual?: (first: any, second: any) => boolean;
-        deepCopy?: (target: any) => any;
+        componentFinder?: (id: string, state: any) => any;
+        isEqual?: (first: any, second: any, state: any) => boolean;
+        deepCopy?: (target: any, state: any) => any;
     }
     export class State {
         private changes_;

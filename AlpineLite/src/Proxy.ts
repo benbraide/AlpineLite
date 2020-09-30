@@ -289,6 +289,10 @@ export namespace AlpineLite{
                 return null;
             }
 
+            if (target instanceof ChangesScope.AlpineLite.Changes || target instanceof StateScope.AlpineLite.State || target instanceof Proxy){
+                return null;
+            }
+
             return new Proxy(details);
         }
 
@@ -843,6 +847,24 @@ export namespace AlpineLite{
                     let component = (proxy.details_.state.FindComponent(id) as Proxy);
                     return (component ? component.GetProxy() : null);
                 };
+            });
+
+            addRootKey('proxy', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy;
+                });
+            });
+
+            addRootKey('state', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy.details_.state;
+                });
+            });
+
+            addRootKey('changes', (proxy: Proxy): any => {
+                return new ValueScope.AlpineLite.Value(() => {
+                    return proxy.details_.state.GetChanges();
+                });
             });
 
             addRootKey('get', (proxy: Proxy): any => {
