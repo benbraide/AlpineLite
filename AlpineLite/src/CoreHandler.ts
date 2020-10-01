@@ -60,7 +60,7 @@ export namespace AlpineLite{
 
         public static Uninit(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
             let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
-            uninitList.pus(() => {
+            uninitList.push(() => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any).call(state.GetValueContext());
@@ -449,6 +449,10 @@ export namespace AlpineLite{
                 }
                 else{
                     (details.list as Array<HTMLElement>).push(clone);
+                }
+
+                for (let name in attributes){//Insert copied attributes
+                    clone.setAttribute(name, attributes[name]);
                 }
                 
                 details.marker.parentElement.insertBefore(clone, details.marker);

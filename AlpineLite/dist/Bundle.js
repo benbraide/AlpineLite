@@ -1657,7 +1657,7 @@ var AlpineLite;
         }
         static Uninit(directive, element, state) {
             let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
-            uninitList.pus(() => {
+            uninitList.push(() => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') { //Call function
                     result.call(state.GetValueContext());
@@ -1988,6 +1988,9 @@ var AlpineLite;
                 }
                 else {
                     details.list.push(clone);
+                }
+                for (let name in attributes) { //Insert copied attributes
+                    clone.setAttribute(name, attributes[name]);
                 }
                 details.marker.parentElement.insertBefore(clone, details.marker);
                 processor.All(clone);

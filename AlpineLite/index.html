@@ -121,6 +121,15 @@
             <span>Count: </span><span x-text="$each.count"></span>
         </div>
     </div>
+    <div style="margin-top: 10px;">
+        <div x-data="{shows: $window.getShows()}" x-each="shows" x-init="$console.log($each.value)">
+            <h2 x-text="$each.index"></h2>
+            <div x-each="$each.value">
+                <span x-text="$each.index"></span>: 
+                <span x-text="$each.value"></span>
+            </div>
+        </div>
+    </div>
     <div style="margin-top: 10px;" x-data x-init="$console.log($state, $changes)">
         <span>Root Name:</span><span x-text="$proxy.GetPath()"></span>
     </div>
@@ -132,6 +141,31 @@
         
         let bootstrap = new AlpineLite.Bootstrap();
         bootstrap.Attach();
+
+        function getShows(){
+            return {
+                first: {
+                    title: 'American Gods',
+                    year: 2017,
+                    seasons: 2,
+                },
+                second: {
+                    title: 'Taboo',
+                    year: 2018,
+                    seasons: 1,
+                },
+                third: {
+                    title: 'Family Guy',
+                    year: 2002,
+                    seasons: 18,
+                },
+                fourth: {
+                    title: 'South Park',
+                    year: 1993,
+                    seasons: 27,
+                },
+            };
+        }
     </script>
     <!--script type="module">
         import * as CoreHandlerScope from './src/CoreHandler.js'
