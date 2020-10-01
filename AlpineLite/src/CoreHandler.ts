@@ -59,12 +59,13 @@ export namespace AlpineLite{
         }
 
         public static Uninit(directive: HandlerScope.AlpineLite.ProcessorDirective, element: HTMLElement, state: StateScope.AlpineLite.State): HandlerScope.AlpineLite.HandlerReturn{
-            element[CoreHandler.GetUninitKey()] = () => {
+            let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
+            uninitList.pus(() => {
                 let result = EvaluatorScope.AlpineLite.Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any).call(state.GetValueContext());
                 }
-            };
+            });
 
             return HandlerScope.AlpineLite.HandlerReturn.Handled;
         }

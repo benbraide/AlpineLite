@@ -6,6 +6,7 @@ declare namespace AlpineLite {
         static LazyLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static ConditionalLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static XHRLoad(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
+        static XHRReplace(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static AttrChange(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn;
         static GetObserveOptions(options: Map<string, any>): IntersectionObserverInit;
         static ObserveWith(options: IntersectionObserverInit, element: HTMLElement, callback: (entry: IntersectionObserverEntry | false) => boolean): void;

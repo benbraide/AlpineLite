@@ -2089,12 +2089,13 @@ namespace AlpineLite{
         }
 
         public static Uninit(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
-            element[CoreHandler.GetUninitKey()] = () => {
+            let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
+            uninitList.pus(() => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function'){//Call function
                     (result as () => any).call(state.GetValueContext());
                 }
-            };
+            });
 
             return HandlerReturn.Handled;
         }
@@ -2718,7 +2719,9 @@ namespace AlpineLite{
                                     
                                     let uninitKey = CoreHandler.GetUninitKey();
                                     if (uninitKey in node){//Execute uninit callback
-                                        (node[uninitKey] as () => void)();
+                                        (node[uninitKey] as Array<() => void>).forEach((callback) => {
+                                            callback();
+                                        });
                                         delete node[uninitKey];
                                     }
     

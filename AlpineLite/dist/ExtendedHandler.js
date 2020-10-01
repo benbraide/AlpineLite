@@ -417,6 +417,32 @@ var AlpineLite;
             }, true);
             return AlpineLite.HandlerReturn.Handled;
         }
+        static XHRReplace(directive, element, state) {
+            state.TrapGetAccess((change) => {
+                let url = AlpineLite.Evaluator.Evaluate(directive.value, state, element);
+                if (typeof url === 'function') { //Call function
+                    url = url.call(state.GetValueContext());
+                }
+                if (!url) { //Watch for valid URL
+                    return;
+                }
+                let parent = element.parentElement;
+                if (!parent) {
+                    return;
+                }
+                fetch(url)
+                    .then((response) => response.text())
+                    .then((data) => {
+                    let tmpl = document.createElement('template');
+                    tmpl.innerHTML = data;
+                    tmpl.content.childNodes.forEach((child) => {
+                        parent.insertBefore(child, element);
+                    });
+                    parent.removeChild(element);
+                });
+            }, true);
+            return AlpineLite.HandlerReturn.Handled;
+        }
         static AttrChange(directive, element, state) {
             if (directive.key !== 'attrChange') {
                 return AlpineLite.HandlerReturn.Nil;
@@ -493,6 +519,16 @@ var AlpineLite;
             }, options);
             ExtendedHandler.observers_.push(observer);
             observer.observe(element);
+            let uninitList = (element[AlpineLite.CoreHandler.GetUninitKey()] = (element[AlpineLite.CoreHandler.GetUninitKey()] || []));
+            uninitList.push(() => {
+                observer.unobserve(element);
+                for (let i = 0; i < ExtendedHandler.observers_.length; ++i) {
+                    if (ExtendedHandler.observers_[i] === observer) {
+                        ExtendedHandler.observers_.splice(i, 1);
+                        break;
+                    }
+                }
+            });
         }
         static FetchLoad(element, url) {
             if (!url) {
@@ -550,6 +586,7 @@ var AlpineLite;
             AlpineLite.Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
             AlpineLite.Handler.AddDirectiveHandler('conditionalLoad', ExtendedHandler.ConditionalLoad);
             AlpineLite.Handler.AddDirectiveHandler('xhrLoad', ExtendedHandler.XHRLoad);
+            AlpineLite.Handler.AddDirectiveHandler('xhrReplace', ExtendedHandler.XHRReplace);
             AlpineLite.Handler.AddDirectiveHandler('attrChange', ExtendedHandler.AttrChange);
         }
     }

@@ -79,7 +79,9 @@ export namespace AlpineLite{
                                     
                                     let uninitKey = CoreHandlerScope.AlpineLite.CoreHandler.GetUninitKey();
                                     if (uninitKey in node){//Execute uninit callback
-                                        (node[uninitKey] as () => void)();
+                                        (node[uninitKey] as Array<() => void>).forEach((callback) => {
+                                            callback();
+                                        });
                                         delete node[uninitKey];
                                     }
     

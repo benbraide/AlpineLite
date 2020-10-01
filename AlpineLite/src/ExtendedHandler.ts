@@ -524,6 +524,39 @@ namespace AlpineLite{
             return HandlerReturn.Handled;
         }
 
+        public static XHRReplace(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
+            state.TrapGetAccess((change: IChange | IBubbledChange): void => {
+                let url = Evaluator.Evaluate(directive.value, state, element);
+                if (typeof url === 'function'){//Call function
+                    url = (url as () => any).call(state.GetValueContext());
+                }
+
+                if (!url){//Watch for valid URL
+                    return;
+                }
+
+                let parent = element.parentElement;
+                if (!parent){
+                    return;
+                }
+                
+                fetch(url)
+                .then((response) => response.text())
+                .then((data) => {
+                    let tmpl = document.createElement('template');
+                    tmpl.innerHTML = data;
+
+                    tmpl.content.childNodes.forEach((child) => {
+                        parent.insertBefore(child, element);
+                    });
+                    
+                    parent.removeChild(element);
+                });
+            }, true);
+            
+            return HandlerReturn.Handled;
+        }
+
         public static AttrChange(directive: ProcessorDirective, element: HTMLElement, state: State): HandlerReturn{
             if (directive.key !== 'attrChange'){
                 return HandlerReturn.Nil;
@@ -618,6 +651,17 @@ namespace AlpineLite{
 
             ExtendedHandler.observers_.push(observer);
             observer.observe(element);
+
+            let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
+            uninitList.push(() => {//Remove observer on uninit
+                observer.unobserve(element);
+                for (let i = 0; i < ExtendedHandler.observers_.length; ++i){
+                    if (ExtendedHandler.observers_[i] === observer){
+                        ExtendedHandler.observers_.splice(i, 1);
+                        break;
+                    }
+                }
+            });
         }
 
         public static FetchLoad(element: HTMLElement, url: string): void{
@@ -684,6 +728,7 @@ namespace AlpineLite{
             Handler.AddDirectiveHandler('lazyLoad', ExtendedHandler.LazyLoad);
             Handler.AddDirectiveHandler('conditionalLoad', ExtendedHandler.ConditionalLoad);
             Handler.AddDirectiveHandler('xhrLoad', ExtendedHandler.XHRLoad);
+            Handler.AddDirectiveHandler('xhrReplace', ExtendedHandler.XHRReplace);
             Handler.AddDirectiveHandler('attrChange', ExtendedHandler.AttrChange);
         }
     }

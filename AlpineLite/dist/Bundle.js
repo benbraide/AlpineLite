@@ -1656,12 +1656,13 @@ var AlpineLite;
             return HandlerReturn.Handled;
         }
         static Uninit(directive, element, state) {
-            element[CoreHandler.GetUninitKey()] = () => {
+            let uninitList = (element[CoreHandler.GetUninitKey()] = (element[CoreHandler.GetUninitKey()] || []));
+            uninitList.pus(() => {
                 let result = Evaluator.Evaluate(directive.value, state, element);
                 if (typeof result === 'function') { //Call function
                     result.call(state.GetValueContext());
                 }
-            };
+            });
             return HandlerReturn.Handled;
         }
         static Bind(directive, element, state) {
@@ -2181,7 +2182,9 @@ var AlpineLite;
                                     });
                                     let uninitKey = CoreHandler.GetUninitKey();
                                     if (uninitKey in node) { //Execute uninit callback
-                                        node[uninitKey]();
+                                        node[uninitKey].forEach((callback) => {
+                                            callback();
+                                        });
                                         delete node[uninitKey];
                                     }
                                     CoreBulkHandler.RemoveOutsideEventHandlers(node);
