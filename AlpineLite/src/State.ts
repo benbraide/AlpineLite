@@ -1,5 +1,6 @@
 import * as StackScope from './Stack'
 import * as ValueScope from './Value'
+import * as RegionScope from './Region'
 import * as ChangesScope from './Changes'
 
 export namespace AlpineLite{
@@ -13,6 +14,7 @@ export namespace AlpineLite{
     }
 
     export interface ExternalCallbacks{
+        getRegion: (id: string) => RegionScope.AlpineLite.Region;
         componentFinder?: (id: string, state: any) => any;
         isEqual?: (first: any, second: any, state: any) => boolean;
         deepCopy?: (target: any, state: any) => any;

@@ -122,11 +122,16 @@
         </div>
     </div>
     <div style="margin-top: 10px;">
-        <div x-data="{shows: $window.getShows()}" x-each="shows" x-init="$console.log($each.value)">
+        <div x-data="{shows: $window.getShows()}" x-each="shows">
             <h2 x-text="$each.index"></h2>
-            <div x-each="$each.value">
-                <span x-text="$each.index"></span>: 
-                <span x-text="$each.value"></span>
+            <div>
+                Title: <span x-text="$each.value.title"></span>
+            </div>
+            <div>
+                Year: <span x-text="$each.value.year"></span>
+            </div>
+            <div>
+                Seasons: <span x-text="$each.value.seasons"></span>
             </div>
         </div>
     </div>
